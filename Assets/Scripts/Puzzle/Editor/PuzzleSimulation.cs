@@ -177,6 +177,7 @@ namespace ZF.Puzzle.EditorTools
             private readonly List<string> m_Items = new List<string>();
             private readonly HashSet<string> m_Solved = new HashSet<string>();
             private readonly HashSet<string> m_Steps = new HashSet<string>();
+            private readonly Dictionary<string, string> m_DefaultFeedback = new Dictionary<string, string>();
 
             public IReadOnlyBindableProperty<int> Revision => m_Revision;
             public IReadOnlyBindableProperty<string> SelectedItem => m_SelectedItem;
@@ -252,6 +253,24 @@ namespace ZF.Puzzle.EditorTools
                     m_Steps.Add(puzzleId + "/" + stepId))
                 {
                     Bump();
+                }
+            }
+
+            public string GetDefaultFeedback(string interactionId)
+            {
+                if (string.IsNullOrEmpty(interactionId))
+                {
+                    return "";
+                }
+
+                return m_DefaultFeedback.TryGetValue(interactionId, out string text) ? text : "";
+            }
+
+            public void SetDefaultFeedback(string interactionId, string text)
+            {
+                if (!string.IsNullOrEmpty(interactionId))
+                {
+                    m_DefaultFeedback[interactionId] = text ?? "";
                 }
             }
 

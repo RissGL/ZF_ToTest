@@ -48,10 +48,12 @@ namespace ZF.Puzzle.EditorTools
         private int m_PendingDeletePuzzle = -1;
         private PuzzleForm m_Form;
 
-        private bool m_ShowObjects = true;
+        // 物体 / 人物 / 道具默认**不建节点** —— 目标就写在规则标题上（#3 woodpile · 空手点），
+        // 单拉节点纯粹是噪音。想按目标排查时再从工具栏打开。
+        private bool m_ShowObjects = false;
         private bool m_ShowRules = true;
         private bool m_ShowFlags = true;
-        private bool m_ShowItems = true;
+        private bool m_ShowItems = false;
         private bool m_ShowPuzzles = true;
         private bool m_ShowEras = true;
 
@@ -493,7 +495,13 @@ namespace ZF.Puzzle.EditorTools
 
             m_PanelButtons.Add(Button("复制这条", () => DuplicateRule(index)));
             m_PanelButtons.Add(Button("删除这条", () => m_PendingDeleteRule = index));
-            m_PanelButtons.Add(Button("选中它的目标", () => SelectTarget(rule != null ? rule.targetId : "")));
+
+            // 物体节点默认不建了，所以「针对同一个目标做点什么」的入口就放在规则这边
+            if (rule != null && !string.IsNullOrEmpty(rule.targetId))
+            {
+                m_PanelButtons.Add(Button($"＋ 再给「{rule.targetId}」加一条", () => AddRule(rule.targetId)));
+                m_PanelButtons.Add(Button("试跑：点这个目标", () => RunTrace(rule.targetId, false)));
+            }
         }
 
         // ===================== 谜题 =====================

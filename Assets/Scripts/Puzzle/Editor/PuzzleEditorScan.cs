@@ -183,6 +183,45 @@ namespace ZF.Puzzle.EditorTools
             }
 
             CheckShadowing(rules, result);
+            CheckPureFallbackRules(rules, result);
+        }
+
+        /// <summary>
+        /// 「无条件 + 只有一个提示效果」的兜底规则：它能干的事，其实用一条字段就能干
+        /// —— 挂到上一条同类规则的 elseFeedback，或者挂到物体的「默认提示」上。
+        /// 这种规则在图里就是一个纯占位节点，多了图会乱死，所以提醒一句。
+        /// </summary>
+        private static void CheckPureFallbackRules(List<InteractionRule> rules, PuzzleScanResult result)
+        {
+            for (int i = 0; i < rules.Count; i++)
+            {
+                InteractionRule rule = rules[i];
+                if (rule == null || rule.conditions.Count != 0)
+                {
+                    continue;
+                }
+
+                bool onlyFeedback = rule.effects.Count == 1 && rule.effects[0] is FeedbackEffect;
+                if (!onlyFeedback)
+                {
+                    continue;
+                }
+
+                // 上面有没有同类（同目标同动作）的规则？有的话它就是纯兜底，直接并上去
+                int sameTargetAbove = -1;
+                for (int j = 0; j < i; j++)
+                {
+                    if (Covers(rules[j], rule) || Covers(rule, rules[j]))
+                    {
+                        sameTargetAbove = j;
+                        break;
+                    }
+                }
+
+                result.Add(i, false, sameTargetAbove >= 0
+                    ? $"这条只是兜底提示，不用单拉一条 —— 把这句话填到第 {sameTargetAbove + 1} 条的「条件不满足时，对玩家说」里就行。"
+                    : "这条只是「点它没反应时说一句话」—— 建议改成填在物体自己的「空手点它时的默认提示」上，规则表里就少一行。");
+            }
         }
 
         /// <summary>「上面那条无条件规则会不会把它吃干净」—— 规则表最常见的坑就是把兜底写前面了。</summary>
