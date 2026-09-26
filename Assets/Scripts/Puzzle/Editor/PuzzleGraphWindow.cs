@@ -48,14 +48,15 @@ namespace ZF.Puzzle.EditorTools
         private int m_PendingDeletePuzzle = -1;
         private PuzzleForm m_Form;
 
-        // 物体 / 人物 / 道具默认**不建节点** —— 目标就写在规则标题上（#3 woodpile · 空手点），
-        // 单拉节点纯粹是噪音。想按目标排查时再从工具栏打开。
+        // 物体 / 人物 / 道具 / 时代默认**不建节点** —— 目标写在规则标题上（#3 woodpile · 空手点），
+        // 时代写在谜题节点正面（★ 主线：解开 = 石器时代通关）。这些单拉节点纯粹是噪音；
+        // 只有 flag（谁写谁读）和谜题（完成链）才真的需要图。想按类型排查时再从工具栏打开。
         private bool m_ShowObjects = false;
         private bool m_ShowRules = true;
         private bool m_ShowFlags = true;
         private bool m_ShowItems = false;
         private bool m_ShowPuzzles = true;
-        private bool m_ShowEras = true;
+        private bool m_ShowEras = false;
 
         [MenuItem("Tools/谜题/谜题图", false, 30)]
         public static void Open()
