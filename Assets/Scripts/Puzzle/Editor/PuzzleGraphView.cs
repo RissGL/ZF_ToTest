@@ -178,11 +178,41 @@ namespace ZF.Puzzle.EditorTools
                 }
             }
 
+            // 先统计每个 flag「被哪些规则写 / 被哪些规则当门槛读」——
+            // 图上两种边的方向不同（规则→flag = 写，flag→规则 = 读），
+            // 光看箭头分不清，所以把规则编号写在 flag 节点上，一眼知道这条线是哪来的。
+            Dictionary<string, List<int>> flagWriters = new Dictionary<string, List<int>>();
+            Dictionary<string, List<int>> flagReaders = new Dictionary<string, List<int>>();
+
+            for (int i = 0; i < table.interactionRules.Count; i++)
+            {
+                InteractionRule rule = table.interactionRules[i];
+                if (rule == null)
+                {
+                    continue;
+                }
+
+                for (int e = 0; e < rule.effects.Count; e++)
+                {
+                    string flag = FlagNameOf(rule.effects[e]);
+                    if (!string.IsNullOrEmpty(flag))
+                    {
+                        AddIndex(flagWriters, flag, i + 1);
+                    }
+                }
+
+                for (int c = 0; c < rule.conditions.Count; c++)
+                {
+                    CollectReaderFlags(rule.conditions[c], flagReaders, i + 1);
+                }
+            }
+
             if (showFlags)
             {
                 foreach (string flag in Sorted(Union(scan.WrittenFlags, scan.ReadFlags)))
                 {
-                    string body = $"写：{(scan.WrittenFlags.Contains(flag) ? "有" : "无")}    读：{(scan.ReadFlags.Contains(flag) ? "有" : "无")}";
+                    // 写清楚是哪几条规则：这样"为什么这个 flag 连了这么多线"一眼就有答案
+                    string body = $"写它的规则：{RuleList(flagWriters, flag)}\n读它的规则：{RuleList(flagReaders, flag)}";
                     graph.AddNode(new PuzzleGraphNode("flag:" + flag, -1, flag, body, FlagColor));
                 }
             }
@@ -198,7 +228,13 @@ namespace ZF.Puzzle.EditorTools
                     }
 
                     string title = string.IsNullOrEmpty(puzzle.title) ? puzzle.id : puzzle.title;
-                    string head = puzzle.isMainPuzzle ? "主线：解开 = 这个时代通关" : "支线";
+                    string eraTitle = EraCatalog.Get(puzzle.era).title;
+
+                    // 时代不再单独建节点了，所以「属于哪个时代 / 解开算不算通关」写在节点正面
+                    string head = puzzle.isMainPuzzle
+                        ? $"★ 主线：解开 = {eraTitle}通关"
+                        : $"{eraTitle} · 支线";
+
                     string body = puzzle.mode == PuzzleMode.Steps
                         ? $"{head}\n步骤式 {puzzle.steps.Count} 步{(puzzle.stepsInOrder ? "（按顺序）" : "（任意顺序）")}"
                         : $"{head}\n条件式 {puzzle.conditions.Count} 条";
@@ -228,7 +264,11 @@ namespace ZF.Puzzle.EditorTools
 
                     string target = string.IsNullOrEmpty(rule.targetId) ? "*任意物体*" : rule.targetId;
                     string verb = VerbText(rule.verb) + (string.IsNullOrEmpty(rule.itemId) ? "" : " " + rule.itemId);
-                    string title = $"#{i + 1}  {target} · {verb}";
+
+                    // 条件里的 flag 也写进标题：不然光看"这条规则连着 fire_lit"不知道是为什么
+                    string needs = ConditionFlags(rule);
+                    string title = $"#{i + 1}  {target} · {verb}" + (string.IsNullOrEmpty(needs) ? "" : $"   ← 要 {needs}");
+
                     graph.AddNode(new PuzzleGraphNode("rule:" + i, i, title, RuleBody(rule), RuleColor));
                 }
             }
@@ -545,6 +585,139 @@ namespace ZF.Puzzle.EditorTools
                 case Verb.Interact: return "空手点";
                 case Verb.UseItem: return "用道具";
                 default: return "任意动作";
+            }
+        }
+
+        // ===================== flag 读写统计（写到节点上，好解释那些线是哪来的） =====================
+
+        private static void AddIndex(Dictionary<string, List<int>> map, string key, int ruleNumber)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                return;
+            }
+
+            if (!map.TryGetValue(key, out List<int> list))
+            {
+                list = new List<int>();
+                map[key] = list;
+            }
+
+            if (!list.Contains(ruleNumber))
+            {
+                list.Add(ruleNumber);
+            }
+        }
+
+        /// <summary>这条效果写了哪个 flag（没有就返回空）。</summary>
+        private static string FlagNameOf(PuzzleEffect effect)
+        {
+            switch (effect)
+            {
+                case SetFlagEffect flag: return flag.flag;
+                case AddFlagEffect flag: return flag.flag;
+                default: return null;
+            }
+        }
+
+        /// <summary>递归收集这条条件读了哪些 flag。</summary>
+        private static void CollectReaderFlags(PuzzleCondition condition, Dictionary<string, List<int>> map, int ruleNumber)
+        {
+            switch (condition)
+            {
+                case FlagCondition flag:
+                    AddIndex(map, flag.flag, ruleNumber);
+                    return;
+
+                case AndCondition and:
+                    for (int i = 0; i < and.items.Count; i++)
+                    {
+                        CollectReaderFlags(and.items[i], map, ruleNumber);
+                    }
+
+                    return;
+
+                case OrCondition or:
+                    for (int i = 0; i < or.items.Count; i++)
+                    {
+                        CollectReaderFlags(or.items[i], map, ruleNumber);
+                    }
+
+                    return;
+
+                case NotCondition not:
+                    CollectReaderFlags(not.item, map, ruleNumber);
+                    return;
+            }
+        }
+
+        private static string RuleList(Dictionary<string, List<int>> map, string flag)
+        {
+            if (!map.TryGetValue(flag, out List<int> list) || list.Count == 0)
+            {
+                return "（没有）";
+            }
+
+            List<string> parts = new List<string>();
+            for (int i = 0; i < list.Count; i++)
+            {
+                parts.Add("#" + list[i]);
+            }
+
+            return string.Join(" ", parts);
+        }
+
+        /// <summary>这条规则的条件里读了哪些 flag，拼成一行（最多列三个）。</summary>
+        private static string ConditionFlags(InteractionRule rule)
+        {
+            List<string> flags = new List<string>();
+
+            for (int i = 0; i < rule.conditions.Count; i++)
+            {
+                CollectFlagNames(rule.conditions[i], flags);
+            }
+
+            if (flags.Count == 0)
+            {
+                return "";
+            }
+
+            return flags.Count <= 3
+                ? string.Join("、", flags)
+                : string.Join("、", flags.GetRange(0, 3)) + "…";
+        }
+
+        private static void CollectFlagNames(PuzzleCondition condition, List<string> flags)
+        {
+            switch (condition)
+            {
+                case FlagCondition flag:
+                    if (!string.IsNullOrEmpty(flag.flag) && !flags.Contains(flag.flag))
+                    {
+                        flags.Add(flag.flag);
+                    }
+
+                    return;
+
+                case AndCondition and:
+                    for (int i = 0; i < and.items.Count; i++)
+                    {
+                        CollectFlagNames(and.items[i], flags);
+                    }
+
+                    return;
+
+                case OrCondition or:
+                    for (int i = 0; i < or.items.Count; i++)
+                    {
+                        CollectFlagNames(or.items[i], flags);
+                    }
+
+                    return;
+
+                case NotCondition not:
+                    CollectFlagNames(not.item, flags);
+                    return;
             }
         }
 
