@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ZGameFramework;
+using ZF.EraGallery;
 
 namespace ZF.Puzzle
 {
@@ -45,6 +46,33 @@ namespace ZF.Puzzle
         string GetDefaultFeedback(string interactionId);
         void SetDefaultFeedback(string interactionId, string text);
 
+        // ---- 场景内容登记：这个 id 是什么东西 ----
+        // 规则要能按**类别**批量命中（`@rift` 管四个裂隙），还得知道"被点的这个在哪个时代"，
+        // 而这两个信息只有场景里的组件自己知道。所以组件在 Awake 里把自己登记进来 ——
+        // 和 defaultFeedback 同一个路子：**场景内容，不进存档**。
+        //
+        // 人物的时代不从这里读：人是会走的，权威在 ICharacterModel。
+        void RegisterTarget(string interactionId, EraId era, string category, string displayName);
+        bool IsKnownTarget(string interactionId);
+
+        /// <summary>它属于哪个类别（没登记的返回 ""）。规则里的 `@类别` 目标和它比。</summary>
+        string GetTargetCategory(string interactionId);
+
+        /// <summary>它摆在哪个时代（没登记的返回 Stone）。规则里的「它所在的时代」用它。</summary>
+        EraId GetTargetEra(string interactionId);
+
+        /// <summary>显示名（没登记的返回 id 本身）。文案里的 {目标名} / {人物名} 用它。</summary>
+        string GetTargetDisplayName(string interactionId);
+
+        /// <summary>
+        /// 挂在它身上的一句额外文案（文案里的 {目标说} 用它，比如"被点名时的一句台词"）。
+        /// 通配规则（"任意人物：点名"）说不了每个人不同的话，这句就是那个出口。
+        /// 和 defaultFeedback 一样是**场景内容**，不进存档。
+        /// </summary>
+        string GetTargetSpeech(string interactionId);
+
+        void SetTargetSpeech(string interactionId, string text);
+
         // ---- 谜题 ----
         bool IsSolved(string puzzleId);
         void MarkSolved(string puzzleId);
@@ -75,6 +103,19 @@ namespace ZF.Puzzle
 
         /// <summary>物体/人物上写的默认提示：id → 那句话。场景内容，不进存档。</summary>
         private readonly Dictionary<string, string> m_DefaultFeedback = new Dictionary<string, string>();
+
+        /// <summary>场景里这个 id 是什么东西（时代 / 类别 / 显示名）。场景内容，不进存档。</summary>
+        private readonly Dictionary<string, TargetInfo> m_Targets = new Dictionary<string, TargetInfo>();
+
+        /// <summary>挂在物体/人物身上的一句额外文案（{目标说}）。场景内容，不进存档。</summary>
+        private readonly Dictionary<string, string> m_Speeches = new Dictionary<string, string>();
+
+        private class TargetInfo
+        {
+            public EraId Era;
+            public string Category;
+            public string DisplayName;
+        }
 
         public IReadOnlyBindableProperty<int> Revision => m_Revision;
         public IReadOnlyBindableProperty<string> SelectedItem => m_SelectedItem;
@@ -220,6 +261,61 @@ namespace ZF.Puzzle
             }
 
             m_DefaultFeedback[interactionId] = text ?? "";
+        }
+
+        // ===================== 场景内容登记 =====================
+
+        public void RegisterTarget(string interactionId, EraId era, string category, string displayName)
+        {
+            if (string.IsNullOrEmpty(interactionId))
+            {
+                return;
+            }
+
+            m_Targets[interactionId] = new TargetInfo
+            {
+                Era = era,
+                Category = string.IsNullOrEmpty(category) ? PuzzleCategories.Prop : category,
+                DisplayName = displayName ?? "",
+            };
+        }
+
+        public bool IsKnownTarget(string interactionId) =>
+            !string.IsNullOrEmpty(interactionId) && m_Targets.ContainsKey(interactionId);
+
+        public string GetTargetCategory(string interactionId) =>
+            !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                ? info.Category
+                : "";
+
+        public EraId GetTargetEra(string interactionId) =>
+            !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                ? info.Era
+                : EraId.Stone;
+
+        public string GetTargetDisplayName(string interactionId)
+        {
+            if (!string.IsNullOrEmpty(interactionId) &&
+                m_Targets.TryGetValue(interactionId, out TargetInfo info) &&
+                !string.IsNullOrEmpty(info.DisplayName))
+            {
+                return info.DisplayName;
+            }
+
+            return interactionId ?? "";
+        }
+
+        public string GetTargetSpeech(string interactionId) =>
+            !string.IsNullOrEmpty(interactionId) && m_Speeches.TryGetValue(interactionId, out string text) ? text : "";
+
+        public void SetTargetSpeech(string interactionId, string text)
+        {
+            if (string.IsNullOrEmpty(interactionId))
+            {
+                return;
+            }
+
+            m_Speeches[interactionId] = text ?? "";
         }
 
         // ===================== 谜题 =====================

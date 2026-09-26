@@ -115,7 +115,8 @@ namespace ZF.Puzzle
 
             // 匹配逻辑只有一份实现（PuzzleRuleMatcher），编辑器里的「试跑」用的是同一个
             InteractionRule rule = PuzzleRuleMatcher.SelectRule(
-                m_Table.interactionRules, targetId, verb, itemId, context, out string fallbackFeedback);
+                m_Table.interactionRules, targetId, context.TargetCategory, verb, itemId, context,
+                out string fallbackFeedback);
 
             if (rule != null)
             {
@@ -136,14 +137,14 @@ namespace ZF.Puzzle
             //   ② 物体上写的「默认提示」：压根没有任何规则命中时说的话
             if (!string.IsNullOrEmpty(fallbackFeedback))
             {
-                EmitFeedback(targetId, fallbackFeedback);
+                EmitFeedback(targetId, fallbackFeedback, context);
             }
             else
             {
                 string own = this.GetModel<IPuzzleModel>()?.GetDefaultFeedback(targetId);
                 if (!string.IsNullOrEmpty(own))
                 {
-                    EmitFeedback(targetId, own);
+                    EmitFeedback(targetId, own, context);
                 }
             }
 
@@ -158,7 +159,8 @@ namespace ZF.Puzzle
         }
 
         private bool HasMatchingRule(string targetId, Verb verb, string itemId) =>
-            PuzzleRuleMatcher.HasMatch(m_Table.interactionRules, targetId, verb, itemId);
+            PuzzleRuleMatcher.HasMatch(m_Table.interactionRules, targetId,
+                this.GetModel<IPuzzleModel>()?.GetTargetCategory(targetId) ?? "", verb, itemId);
 
         // ===================== 效果 =====================
 
@@ -451,39 +453,58 @@ namespace ZF.Puzzle
         private PuzzleContext BuildContext(string targetId, Verb verb, string itemId)
         {
             IPuzzleModel model = this.GetModel<IPuzzleModel>();
+            ICharacterModel characters = this.GetModel<ICharacterModel>();
             IEraWindowModel eraModel = this.GetModel<IEraWindowModel>();
 
             string target = targetId ?? "";
 
+            // 「被点的这个在哪个时代、属于哪一类」：
+            // 人物问人物模型（人是会走的），物体问登记表（场景里的组件在 Awake 登记过）。
+            bool isCharacter = characters != null && characters.IsKnown(target);
+
             return new PuzzleContext
             {
                 TargetId = target,
+                TargetCategory = isCharacter
+                    ? PuzzleCategories.Character
+                    : (model != null ? model.GetTargetCategory(target) : ""),
+                TargetEra = isCharacter
+                    ? characters.GetEra(target)
+                    : (model != null ? model.GetTargetEra(target) : EraId.Stone),
                 Verb = verb,
                 UsedItemId = itemId ?? "",
                 State = model,
-                Characters = this.GetModel<ICharacterModel>(),
+                Characters = characters,
                 CharacterOps = this.GetArchitecture().GetSystem<ICharacterSystem>(),
                 FocusedEraIndex = eraModel != null ? eraModel.FocusedIndex.Value : -1,
-                Feedback = message => EmitFeedback(target, message),
+                Feedback = message => EmitFeedback(target, message, null),
                 SolvePuzzle = SolvePuzzle,
             };
         }
 
-        private void EmitFeedback(string targetId, string message)
+        /// <summary>
+        /// 发一句反馈。文案里的占位符（{"{目标名}"} / {"{下一个}"}…）在这里替换 ——
+        /// 规则要能一条管一批目标，那句话就不能写死名字。
+        /// </summary>
+        private void EmitFeedback(string targetId, string message, PuzzleContext context = null)
         {
             if (string.IsNullOrEmpty(message))
             {
                 return;
             }
 
+            string text = context != null
+                ? PuzzleText.Format(message, context)
+                : PuzzleText.Format(message, BuildContext(targetId, Verb.Any, ""));
+
             this.SendEvent(new PuzzleFeedbackEvent
             {
                 TargetId = targetId,
-                Message = message,
+                Message = text,
             });
 
             // UI 还没做，先打在 Console 里 —— 至少能看出谜题逻辑是通的
-            Debug.Log($"[谜题] {message}");
+            Debug.Log($"[谜题] {text}");
         }
     }
 }

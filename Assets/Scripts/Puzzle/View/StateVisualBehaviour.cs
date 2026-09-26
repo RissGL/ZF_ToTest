@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using ZGameFramework;
 using ZGameFramework.Utility;
+using ZF.EraGallery;
 using ZF.Game;
 
 namespace ZF.Puzzle
@@ -30,6 +31,9 @@ namespace ZF.Puzzle
         [Label("点击区域（留空就用自己身上的 BoxCollider2D）")]
         [SerializeField] protected BoxCollider2D hitArea;
 
+        [Label("类别（规则表写 @类别 就能一次管一批，如 @rift；留空 = prop）")]
+        [SerializeField] protected string category = "";
+
         [Label("悬停高亮（可为空）")]
         [SerializeField] protected SpriteRenderer hoverFrame;
 
@@ -38,6 +42,9 @@ namespace ZF.Puzzle
 
         [Label("空手点它、又没有任何规则命中时说什么（留空 = 不吭声）", 2)]
         [SerializeField] protected string defaultFeedback = "";
+
+        [Label("挂在它身上的一句额外文案（规则里用 {目标说} 引用，比如被点名时的台词）", 2)]
+        [SerializeField] protected string speech = "";
 
         [Header("形状层级")]
         [Label("自动排形状层级：按层级顺序依次 +1（打开后 Inspector 里手填的 sortingOrder 会被覆盖，但重叠的形状绝不会画得不确定）")]
@@ -59,6 +66,22 @@ namespace ZF.Puzzle
         /// <summary>这个东西在规则表 / 状态里用的 id。物件用物体 id，人物用人物 id。</summary>
         public abstract string InteractionId { get; }
 
+        /// <summary>它属于哪个类别（规则里的 `@类别` 目标和它比）。人物固定是 character。</summary>
+        public string Category =>
+            string.IsNullOrEmpty(category) ? DefaultCategory : category;
+
+        /// <summary>类别留空时算哪一类。</summary>
+        protected virtual string DefaultCategory => PuzzleCategories.Prop;
+
+        /// <summary>显示名（文案里的 {"{目标名}"} 用它）。</summary>
+        public virtual string DisplayName => InteractionId;
+
+        /// <summary>挂在它身上的一句额外文案（文案里的 {"{目标说}"} 用它）。</summary>
+        public virtual string Speech => speech;
+
+        /// <summary>它摆在场景里的哪个时代（只有物体用得上：人是会走的，权威在 ICharacterModel）。</summary>
+        protected virtual EraId SceneEra => EraId.Stone;
+
         public BoxCollider2D HitArea => hitArea;
 
         public IArchitecture GetArchitecture() => GameApp.Interface;
@@ -71,6 +94,10 @@ namespace ZF.Puzzle
             // 把「空手点它没规则命中时说什么」登记给 Model（系统那边只认 id，拿不到组件）。
             // 这是场景内容，不进存档。
             PuzzleState?.SetDefaultFeedback(InteractionId, defaultFeedback);
+
+            // 同理：规则要按类别批量命中、要知道"被点的这个在哪个时代"，都只有组件自己知道
+            PuzzleState?.RegisterTarget(InteractionId, SceneEra, Category, DisplayName);
+            PuzzleState?.SetTargetSpeech(InteractionId, speech);
 
             if (baseSortingOrder < 0)
             {

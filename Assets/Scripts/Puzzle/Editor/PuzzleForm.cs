@@ -87,6 +87,15 @@ namespace ZF.Puzzle.EditorTools
         private readonly List<string> m_Puzzles = new List<string>();
         private readonly List<string> m_States = new List<string>();
 
+        /// <summary>目标候选 = `@类别`（一次管一批）+ 具体 id。</summary>
+        private readonly List<string> m_Targets = new List<string>();
+
+        /// <summary>人物 id 候选 + `@self`（"被点的那个"）。</summary>
+        private readonly List<string> mCharacterRefs = new List<string>();
+
+        /// <summary>需要"是哪个目标自己"的字段用它。</summary>
+        private readonly List<string> mObjectRefs = new List<string>();
+
         public PuzzleForm(PuzzleScanResult scan)
         {
             m_Scan = scan;
@@ -102,6 +111,9 @@ namespace ZF.Puzzle.EditorTools
             m_Characters.Clear();
             m_Puzzles.Clear();
             m_States.Clear();
+            m_Targets.Clear();
+            mCharacterRefs.Clear();
+            mObjectRefs.Clear();
 
             if (m_Scan == null)
             {
@@ -121,6 +133,24 @@ namespace ZF.Puzzle.EditorTools
             m_Objects.Sort();
             m_Characters.Sort();
             m_States.Sort();
+
+            // 类别在前（`@rift` 这种是"一次管一批"，比具体 id 更常用），再列具体 id
+            foreach (string category in m_Scan.Categories)
+            {
+                if (!string.IsNullOrEmpty(category))
+                {
+                    m_Targets.Add(PuzzleRef.CategoryRef(category));
+                }
+            }
+
+            m_Targets.Sort();
+            m_Targets.AddRange(m_Objects);
+
+            mCharacterRefs.AddRange(m_Characters);
+            mCharacterRefs.Add(PuzzleRef.Self);
+
+            mObjectRefs.AddRange(m_Objects);
+            mObjectRefs.Add(PuzzleRef.Self);
         }
 
         public void SetPuzzleIds(List<string> ids)
@@ -345,7 +375,7 @@ namespace ZF.Puzzle.EditorTools
                 }
 
                 GUILayout.FlexibleSpace();
-                EditorGUILayout.LabelField("从下往上试，第一条条件全满足的生效", EditorStyles.miniLabel, GUILayout.Width(220f));
+                EditorGUILayout.LabelField("从上往下试，第一条条件全满足的生效", EditorStyles.miniLabel, GUILayout.Width(220f));
             }
         }
 
@@ -373,7 +403,7 @@ namespace ZF.Puzzle.EditorTools
                     Picker(item, m_Items, "道具", IdWidth, "(不要求)");
                 }
 
-                Picker(target, m_Objects, null, IdWidth + 40f, "(任何物体)");
+                Picker(target, m_Targets, null, IdWidth + 60f, "(任何目标)");
             }
         }
 
@@ -544,7 +574,7 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case ObjectStateCondition _:
-                    Picker(element.FindPropertyRelative("interactableId"), m_Objects, "物体", IdWidth, "(不检查)");
+                    Picker(element.FindPropertyRelative("interactableId"), mObjectRefs, "物体", IdWidth, "(不检查)");
                     Picker(element.FindPropertyRelative("state"), m_States, "状态名", IdWidth, "(留空)");
                     return;
 
@@ -558,23 +588,25 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case CharacterInEraCondition _:
-                    Picker(element.FindPropertyRelative("characterId"), m_Characters, "人物", IdWidth, "(不限)");
-                    EraPopup(element.FindPropertyRelative("era"));
+                    Picker(element.FindPropertyRelative("characterId"), mCharacterRefs, "人物", IdWidth, "(不限)");
+                    EditorGUILayout.LabelField("在", GUILayout.Width(18f));
+                    EraRefRow(element, "eraRef", "era", false);
                     return;
 
                 case CharacterCountInEraCondition _:
-                    EraPopup(element.FindPropertyRelative("era"));
+                    EraRefRow(element, "eraRef", "era", false);
                     EditorGUILayout.LabelField("里的人数", GUILayout.Width(56f));
                     EnumPopup(element.FindPropertyRelative("op"), new[] { "等于", "不等于", "大于", "大于等于", "小于", "小于等于" });
                     Number(element.FindPropertyRelative("count"), 44f);
                     return;
 
                 case SelectedCharacterCondition _:
-                    Picker(element.FindPropertyRelative("characterId"), m_Characters, "点名的是", IdWidth, "(任意人)");
+                    Picker(element.FindPropertyRelative("characterId"), mCharacterRefs, "点名的是", IdWidth, "(任意人)");
                     return;
 
                 case SelectedCharacterInEraCondition _:
-                    EraPopup(element.FindPropertyRelative("era"));
+                    EditorGUILayout.LabelField("点名的人在", GUILayout.Width(66f));
+                    EraRefRow(element, "eraRef", "era", false);
                     return;
 
                 case EraFocusedCondition _:
@@ -609,7 +641,7 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case SetObjectStateEffect _:
-                    Picker(element.FindPropertyRelative("interactableId"), m_Objects, "物体", IdWidth, "(自己)");
+                    Picker(element.FindPropertyRelative("interactableId"), mObjectRefs, "物体", IdWidth, "(自己)");
                     EditorGUILayout.LabelField("→", GUILayout.Width(14f));
                     Picker(element.FindPropertyRelative("state"), m_States, "状态名", IdWidth, "(lit / cold / open…)");
                     return;
@@ -634,34 +666,34 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case MoveCharacterEffect _:
-                    Picker(element.FindPropertyRelative("characterId"), m_Characters, "人物", IdWidth, "(留空?)");
+                    Picker(element.FindPropertyRelative("characterId"), mCharacterRefs, "人物", IdWidth, "(留空?)");
                     EditorGUILayout.LabelField("→", GUILayout.Width(14f));
-                    EraPopup(element.FindPropertyRelative("targetEra"));
+                    EraRefRow(element, "eraRef", "targetEra", true);
                     return;
 
                 case MoveCharacterStepEffect _:
-                    Picker(element.FindPropertyRelative("characterId"), m_Characters, "人物", IdWidth, "(留空?)");
+                    Picker(element.FindPropertyRelative("characterId"), mCharacterRefs, "人物", IdWidth, "(留空?)");
                     EnumPopup(element.FindPropertyRelative("step"), new[] { "往前一个时代", "往回一个时代" }, EnumWidth + 40f);
                     return;
 
                 case MoveSelectedCharacterEffect _:
                     EditorGUILayout.LabelField("点名的那个人 →", GUILayout.Width(84f));
-                    EraPopup(element.FindPropertyRelative("targetEra"));
+                    EraRefRow(element, "eraRef", "targetEra", true);
                     return;
 
                 case MoveEraCharactersEffect _:
-                    EraPopup(element.FindPropertyRelative("fromEra"));
+                    EraRefRow(element, "fromEraRef", "fromEra", false);
                     EditorGUILayout.LabelField("里的人 →", GUILayout.Width(56f));
-                    EraPopup(element.FindPropertyRelative("targetEra"));
+                    EraRefRow(element, "eraRef", "targetEra", true);
                     return;
 
                 case SelectCharacterEffect _:
-                    Picker(element.FindPropertyRelative("characterId"), m_Characters, "点名", IdWidth, "(取消点名)");
+                    Picker(element.FindPropertyRelative("characterId"), mCharacterRefs, "点名", IdWidth, "(取消点名)");
                     return;
 
                 case PlayCharacterAnimationEffect _:
                     EditorGUILayout.LabelField("让", GUILayout.Width(18f));
-                    Picker(element.FindPropertyRelative("characterId"), m_Characters, null, IdWidth, "(点名的那个人)");
+                    Picker(element.FindPropertyRelative("characterId"), mCharacterRefs, null, IdWidth, "(点名的那个人)");
                     EditorGUILayout.LabelField("播", GUILayout.Width(18f));
                     Picker(element.FindPropertyRelative("clip"), null, null, 90f, "(动画名)");
                     return;
@@ -726,7 +758,7 @@ namespace ZF.Puzzle.EditorTools
                         continue;
                     }
 
-                    menu.AddItem(new GUIContent(candidate), candidate == property.stringValue, () =>
+                    menu.AddItem(new GUIContent(RefLabel(candidate)), candidate == property.stringValue, () =>
                     {
                         property.stringValue = candidate;
                         property.serializedObject.ApplyModifiedProperties();
@@ -737,9 +769,53 @@ namespace ZF.Puzzle.EditorTools
             menu.ShowAsContext();
         }
 
+        /// <summary>候选菜单里的说法：`@rift` / `@self` 得让人一眼看懂是什么。</summary>
+        public static string RefLabel(string value)
+        {
+            if (PuzzleRef.IsSelf(value))
+            {
+                return "（被点的那个目标自己）";
+            }
+
+            return PuzzleRef.IsCategory(value)
+                ? value + "（这一类，一次管一批）"
+                : value;
+        }
+
         private static void EraPopup(SerializedProperty property)
         {
             EnumPopup(property, new[] { "石器时代", "蒸汽时代", "电气时代", "信息时代" }, EnumWidth + 24f);
+        }
+
+        /// <summary>
+        /// 「算哪个时代」：默认是写死的某个时代；选「被点目标所在的时代」之后，
+        /// 一条规则就能管所有裂隙（点哪个裂隙，就是哪个时代的事）。效果里还能选"它的下一个"。
+        /// </summary>
+        private static void EraRefRow(SerializedProperty element, string refField, string eraField, bool allowNext)
+        {
+            SerializedProperty eraRef = element.FindPropertyRelative(refField);
+            if (eraRef == null)
+            {
+                return;
+            }
+
+            string[] names = allowNext
+                ? new[] { "指定时代", "被点目标所在时代", "它的下一个时代", "它的上一个时代" }
+                : new[] { "指定时代", "被点目标所在时代" };
+
+            int index = Mathf.Clamp(eraRef.intValue, 0, names.Length - 1);
+            int picked = EditorGUILayout.Popup(index, names, GUILayout.Width(EnumWidth + 60f));
+
+            if (picked != index)
+            {
+                eraRef.intValue = picked;
+            }
+
+            // 只有"指定时代"才需要那个具体的时代下拉，其它选项都是算出来的
+            if (eraRef.intValue == 0)
+            {
+                EraPopup(element.FindPropertyRelative(eraField));
+            }
         }
 
         private static void EnumPopup(SerializedProperty property, string[] names, float width = 0f)
