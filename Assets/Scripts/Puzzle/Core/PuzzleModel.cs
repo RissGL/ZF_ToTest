@@ -39,6 +39,12 @@ namespace ZF.Puzzle
         bool RemoveItem(string itemId);
         void SetSelectedItem(string itemId);
 
+        // ---- 物体/人物上写的「默认提示」----
+        // 「空手点它、又没有任何规则命中时说什么」。由场景里的组件在 Awake 登记进来，
+        // 是**场景内容**不是游戏状态，所以不进存档。
+        string GetDefaultFeedback(string interactionId);
+        void SetDefaultFeedback(string interactionId, string text);
+
         // ---- 谜题 ----
         bool IsSolved(string puzzleId);
         void MarkSolved(string puzzleId);
@@ -66,6 +72,9 @@ namespace ZF.Puzzle
 
         /// <summary>步骤式谜题的进度，key = "谜题id/步骤id"。存起来，读档回来进度还在。</summary>
         private readonly HashSet<string> m_Steps = new HashSet<string>();
+
+        /// <summary>物体/人物上写的默认提示：id → 那句话。场景内容，不进存档。</summary>
+        private readonly Dictionary<string, string> m_DefaultFeedback = new Dictionary<string, string>();
 
         public IReadOnlyBindableProperty<int> Revision => m_Revision;
         public IReadOnlyBindableProperty<string> SelectedItem => m_SelectedItem;
@@ -194,6 +203,23 @@ namespace ZF.Puzzle
 
             m_SelectedItem.Value = value;
             this.SendEvent(new PuzzleSelectionEvent { ItemId = value });
+        }
+
+        // ===================== 默认提示 =====================
+
+        public string GetDefaultFeedback(string interactionId) =>
+            !string.IsNullOrEmpty(interactionId) && m_DefaultFeedback.TryGetValue(interactionId, out string text)
+                ? text
+                : "";
+
+        public void SetDefaultFeedback(string interactionId, string text)
+        {
+            if (string.IsNullOrEmpty(interactionId))
+            {
+                return;
+            }
+
+            m_DefaultFeedback[interactionId] = text ?? "";
         }
 
         // ===================== 谜题 =====================

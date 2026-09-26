@@ -316,7 +316,7 @@ namespace ZF.Puzzle.EditorTools
                 }
             }
 
-            Layout(graph, layout, previous);
+            Layout(graph, layout, previous, showObjects, showItems);
         }
 
         private static string RuleBody(InteractionRule rule)
@@ -452,7 +452,7 @@ namespace ZF.Puzzle.EditorTools
 
         /// <summary>按类型分列。规则那一列按表里的顺序从上往下排 = 优先级从上往下。</summary>
         private static void Layout(PuzzleGraphView graph, Dictionary<string, Rect> layout,
-            Dictionary<string, Rect> previous)
+            Dictionary<string, Rect> previous, bool showObjects, bool showItems)
         {
             Dictionary<int, int> cursor = new Dictionary<int, int>();
 
@@ -470,7 +470,7 @@ namespace ZF.Puzzle.EditorTools
                     continue;
                 }
 
-                int column = ColumnOf(node);
+                int column = ColumnOf(node, showObjects, showItems);
                 cursor.TryGetValue(column, out int row);
                 cursor[column] = row + 1;
 
@@ -484,19 +484,59 @@ namespace ZF.Puzzle.EditorTools
             }
         }
 
-        private static int ColumnOf(PuzzleGraphNode node)
+        /// <summary>
+        /// 列是怎么排的：**只给「跨规则共享的东西」留列**（规则 / flag / 谜题 / 时代）。
+        /// 物体、人物、道具默认不建节点（目标就写在规则标题上），所以它们的列要按开关跳过去，
+        /// 不然中间会空出 300 像素的一条缝。
+        /// </summary>
+        private static int ColumnOf(PuzzleGraphNode node, bool showObjects, bool showItems)
         {
-            if (node.RuleIndex >= 0)
+            int column = 0;
+
+            if (showObjects)
             {
-                return 1;
+                if (HasPrefix(node, "obj:"))
+                {
+                    return column;
+                }
+
+                column++;
             }
 
-            if (node.Key.StartsWith("obj:")) return 0;
-            if (node.Key.StartsWith("flag:")) return 2;
-            if (node.Key.StartsWith("item:")) return 2;
-            if (node.Key.StartsWith("puzzle:")) return 3;
-            return 4;
+            if (showItems)
+            {
+                if (HasPrefix(node, "item:"))
+                {
+                    return column;
+                }
+
+                column++;
+            }
+
+            if (node.RuleIndex >= 0)
+            {
+                return column;
+            }
+
+            column++;
+
+            if (HasPrefix(node, "flag:"))
+            {
+                return column;
+            }
+
+            column++;
+
+            if (HasPrefix(node, "puzzle:"))
+            {
+                return column;
+            }
+
+            return column + 1;   // 时代
         }
+
+        private static bool HasPrefix(PuzzleGraphNode node, string prefix) =>
+            node.RuleIndex < 0 && !string.IsNullOrEmpty(node.Key) && node.Key.StartsWith(prefix);
 
         private static string VerbText(Verb verb)
         {

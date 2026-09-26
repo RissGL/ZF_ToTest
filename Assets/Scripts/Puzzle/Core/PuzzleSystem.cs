@@ -131,9 +131,20 @@ namespace ZF.Puzzle
                 return true;
             }
 
+            // 兜底提示分两级（都不用单拉一条规则出来）：
+            //   ① 规则上的 elseFeedback：「匹配上了但条件不满足」时说的话（更准）
+            //   ② 物体上写的「默认提示」：压根没有任何规则命中时说的话
             if (!string.IsNullOrEmpty(fallbackFeedback))
             {
                 EmitFeedback(targetId, fallbackFeedback);
+            }
+            else
+            {
+                string own = this.GetModel<IPuzzleModel>()?.GetDefaultFeedback(targetId);
+                if (!string.IsNullOrEmpty(own))
+                {
+                    EmitFeedback(targetId, own);
+                }
             }
 
             this.SendEvent(new PuzzleInteractionEvent

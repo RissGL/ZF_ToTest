@@ -267,7 +267,9 @@ namespace ZF.Puzzle.EditorTools
             List<SpriteRenderer> all = new List<SpriteRenderer>(cold);
             all.AddRange(lit);
 
-            Finish(target, "woodpile", EraId.Stone, "柴堆", PuzzleStates.Default, groups, null, window, all, white);
+            // 空手点柴堆时的兜底话写在物体上，不单拉规则
+            Finish(target, "woodpile", EraId.Stone, "柴堆", PuzzleStates.Default, groups, null, window, all, white,
+                "一堆干柴。手里得有个火种。");
         }
 
         private static void BuildHearth(Transform window, Sprite white)
@@ -529,14 +531,8 @@ namespace ZF.Puzzle.EditorTools
                         new GiveItemEffect { itemId = Flint },
                         new SetFlagEffect { flag = "rock_searched", value = 1f },
                         new FeedbackEffect { message = "你从岩缝里抠出一块燧石。" }),
-                },
-                new InteractionRule
-                {
-                    note = "岩壁：已经抠过了（兜底，必须排在后面）",
-                    targetId = Rock,
-                    verb = Verb.Interact,
-                    conditions = Conditions(),
-                    effects = Effects(new FeedbackEffect { message = "岩缝里什么都没有了。" }),
+                    // 「已经抠过了」不再单拉一条规则 —— 兜底话写在规则上
+                    elseFeedback = "岩缝里什么都没有了。",
                 },
                 new InteractionRule
                 {
@@ -554,29 +550,15 @@ namespace ZF.Puzzle.EditorTools
                 },
                 new InteractionRule
                 {
-                    note = "柴堆：空手点（兜底）",
-                    targetId = Woodpile,
-                    verb = Verb.Interact,
-                    conditions = Conditions(),
-                    effects = Effects(new FeedbackEffect { message = "一堆干柴。手里得有个火种。" }),
-                },
-                new InteractionRule
-                {
-                    note = "壁炉：火种穿过时间（跨时代联动，条件在前）",
+                    note = "壁炉：火种穿过时间（跨时代联动）",
                     targetId = Hearth,
                     verb = Verb.Interact,
                     conditions = Conditions(FlagOn("fire_lit")),
                     effects = Effects(
                         new SetFlagEffect { flag = "hearth_lit", value = 1f },
                         new FeedbackEffect { message = "壁炉自己烧起来了 —— 火种穿过了时间。" }),
-                },
-                new InteractionRule
-                {
-                    note = "壁炉：还是冷的（兜底，必须排在后面）",
-                    targetId = Hearth,
-                    verb = Verb.Interact,
-                    conditions = Conditions(),
-                    effects = Effects(new FeedbackEffect { message = "壁炉是冷的，一根柴都没有。" }),
+                    // 「还是冷的」不单拉规则，兜底话写在这儿
+                    elseFeedback = "壁炉是冷的，一根柴都没有。",
                 },
             };
 
@@ -628,6 +610,8 @@ namespace ZF.Puzzle.EditorTools
                         new MoveSelectedCharacterEffect { targetEra = next, delayBefore = 0.55f },
                         new PlayCharacterAnimationEffect { characterId = "", clip = "arrive" },
                         new FeedbackEffect { message = $"你点名的那个人一个人跨进了{nextTitle}。" }),
+                    // 「裂隙还闭着」也不单拉一条规则 —— 兜底话写在这儿
+                    elseFeedback = "裂隙还闭着。得先让这个年头的火点起来。",
                 });
 
                 // ② 没点名（或点名的人不在这个时代），这个时代有人 → 整个时代一起走
@@ -655,16 +639,6 @@ namespace ZF.Puzzle.EditorTools
                     verb = Verb.Interact,
                     conditions = Conditions(FlagOn("fire_lit")),
                     effects = Effects(new FeedbackEffect { message = $"{eraTitle}里已经没有人了。" }),
-                });
-
-                // ③ 兜底：裂隙还闭着（必须排最后）
-                rules.Add(new InteractionRule
-                {
-                    note = "时间裂隙：还闭着（兜底，必须排在后面）",
-                    targetId = RiftId(era),
-                    verb = Verb.Interact,
-                    conditions = Conditions(),
-                    effects = Effects(new FeedbackEffect { message = "裂隙还闭着。得先让这个年头的火点起来。" }),
                 });
             }
 
@@ -770,7 +744,8 @@ namespace ZF.Puzzle.EditorTools
         }
 
         private static void Finish(Interactable target, string id, EraId era, string displayName, string defaultState,
-            List<StateGroup> groups, List<VisualStateRule> rules, Transform window, List<SpriteRenderer> shapes, Sprite white)
+            List<StateGroup> groups, List<VisualStateRule> rules, Transform window, List<SpriteRenderer> shapes, Sprite white,
+            string defaultFeedback = "")
         {
             // 高亮框挂在窗口上而不是物体上：这样它不会算进物体的点击区域
             SpriteRenderer halo = CreateHalo(window, shapes, white);
@@ -780,6 +755,10 @@ namespace ZF.Puzzle.EditorTools
             SetInt(so, "era", (int)era);
             SetString(so, "displayName", displayName);
             SetString(so, "defaultState", defaultState);
+
+            // 「空手点它、又没有任何规则命中时说什么」—— 挂在物体上，不占规则行
+            SetString(so, "defaultFeedback", defaultFeedback);
+
             SetRef(so, "hitArea", target.GetComponent<BoxCollider2D>());
             SetRef(so, "hoverFrame", halo);
             WriteStateGroups(so, groups);

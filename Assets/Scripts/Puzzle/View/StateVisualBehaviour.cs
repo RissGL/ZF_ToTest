@@ -36,6 +36,9 @@ namespace ZF.Puzzle
         [Label("运行时按所有状态组自动贴合点击区域")]
         [SerializeField] protected bool autoFitHitArea = true;
 
+        [Label("空手点它、又没有任何规则命中时说什么（留空 = 不吭声）", 2)]
+        [SerializeField] protected string defaultFeedback = "";
+
         [Header("形状层级")]
         [Label("自动排形状层级：按层级顺序依次 +1（打开后 Inspector 里手填的 sortingOrder 会被覆盖，但重叠的形状绝不会画得不确定）")]
         [SerializeField] protected bool autoOrderShapes = true;
@@ -64,6 +67,10 @@ namespace ZF.Puzzle
         {
             PuzzleState = this.GetModel<IPuzzleModel>();
             PuzzleSystem = this.GetSystem<IPuzzleSystem>();
+
+            // 把「空手点它没规则命中时说什么」登记给 Model（系统那边只认 id，拿不到组件）。
+            // 这是场景内容，不进存档。
+            PuzzleState?.SetDefaultFeedback(InteractionId, defaultFeedback);
 
             if (baseSortingOrder < 0)
             {
