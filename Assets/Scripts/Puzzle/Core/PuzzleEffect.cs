@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using ZGameFramework.Utility;
+using ZF.EraGallery;
 
 namespace ZF.Puzzle
 {
@@ -141,5 +142,82 @@ namespace ZF.Puzzle
         public override void Execute(PuzzleContext context) => Debug.Log($"[谜题] {message}");
 
         public override string Describe() => $"日志：{message}";
+    }
+
+    // ===================== 人物相关 =====================
+
+    /// <summary>
+    /// 把一个人搬到另一个时代。
+    /// 「通过一定方式移动」里的方式就是这条效果 —— 把它放进任何一条规则里（点裂隙、解开谜题、用某个道具）。
+    /// </summary>
+    [Serializable]
+    public class MoveCharacterEffect : PuzzleEffect
+    {
+        [Label("人物 id")]
+        public string characterId = "";
+
+        [Label("搬到哪个时代")]
+        public EraId targetEra = EraId.Steam;
+
+        public override void Execute(PuzzleContext context) => context.CharacterOps?.TryMove(characterId, targetEra);
+
+        public override string Describe() => $"把[{characterId}]搬到 {targetEra}";
+    }
+
+    /// <summary>
+    /// 把一个时代里的人**整体**搬到另一个时代 ——
+    /// 「一个时代完成后，窗口里的人一起到下一个时代的窗口去」就是这个。
+    /// </summary>
+    [Serializable]
+    public class MoveEraCharactersEffect : PuzzleEffect
+    {
+        [Label("从哪个时代搬（这个时代里所有人物）")]
+        public EraId fromEra = EraId.Stone;
+
+        [Label("搬到哪个时代")]
+        public EraId targetEra = EraId.Steam;
+
+        public override void Execute(PuzzleContext context) => context.CharacterOps?.TryMoveEra(fromEra, targetEra);
+
+        public override string Describe() => $"把 {fromEra} 里的人整体搬到 {targetEra}";
+    }
+
+    /// <summary>
+    /// 把**当前点名的那个人**搬到某个时代 —— 「只送他一个人过去」。
+    /// 没人点名时什么都不做（所以规则上通常配一个 SelectedCharacterInEraCondition 当门槛）。
+    /// </summary>
+    [Serializable]
+    public class MoveSelectedCharacterEffect : PuzzleEffect
+    {
+        [Label("搬到哪个时代")]
+        public EraId targetEra = EraId.Steam;
+
+        public override void Execute(PuzzleContext context)
+        {
+            string selected = context.Characters != null ? context.Characters.SelectedCharacter.Value : "";
+
+            if (string.IsNullOrEmpty(selected))
+            {
+                return;
+            }
+
+            context.CharacterOps?.TryMove(selected, targetEra);
+        }
+
+        public override string Describe() => $"把点名的那个人搬到 {targetEra}";
+    }
+
+    /// <summary>点名 / 取消点名某个人（characterId 留空 = 取消）。点名的那个就是「单独送走」的对象。</summary>
+    [Serializable]
+    public class SelectCharacterEffect : PuzzleEffect
+    {
+        [Label("人物 id（留空 = 取消点名）")]
+        public string characterId = "";
+
+        public override void Execute(PuzzleContext context) => context.CharacterOps?.Select(characterId);
+
+        public override string Describe() => string.IsNullOrEmpty(characterId)
+            ? "取消点名"
+            : $"点名[{characterId}]";
     }
 }

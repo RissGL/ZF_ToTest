@@ -74,22 +74,7 @@ namespace ZF.Puzzle
                 return true;
             }
 
-            PuzzleContext context = BuildContext(targetId, Verb.Any, "");
-            for (int i = 0; i < conditions.Count; i++)
-            {
-                PuzzleCondition condition = conditions[i];
-                if (condition == null)
-                {
-                    continue;
-                }
-
-                if (!condition.IsMet(context))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return PuzzleRuleMatcher.EvaluateAll(conditions, BuildContext(targetId, Verb.Any, ""));
         }
 
         // ===================== 交互 =====================
@@ -127,43 +112,28 @@ namespace ZF.Puzzle
         private bool RunRules(string targetId, Verb verb, string itemId)
         {
             PuzzleContext context = BuildContext(targetId, verb, itemId);
-            string pendingFeedback = null;
 
-            List<InteractionRule> rules = m_Table.interactionRules;
-            for (int i = 0; i < rules.Count; i++)
+            // 匹配逻辑只有一份实现（PuzzleRuleMatcher），编辑器里的「试跑」用的是同一个
+            InteractionRule rule = PuzzleRuleMatcher.SelectRule(
+                m_Table.interactionRules, targetId, verb, itemId, context, out string fallbackFeedback);
+
+            if (rule != null)
             {
-                InteractionRule rule = rules[i];
-                if (rule == null || !MatchesTarget(rule, targetId, verb, itemId))
+                ExecuteEffects(rule.effects, context);
+                this.SendEvent(new PuzzleInteractionEvent
                 {
-                    continue;
-                }
-
-                context.Rule = rule;
-
-                if (EvaluateAll(rule.conditions, targetId))
-                {
-                    ExecuteEffects(rule.effects, context);
-                    this.SendEvent(new PuzzleInteractionEvent
-                    {
-                        TargetId = targetId,
-                        Verb = verb,
-                        UsedItemId = itemId,
-                        Matched = true,
-                        RuleNote = rule.note,
-                    });
-                    return true;
-                }
-
-                // 记住第一条"匹配了但条件不满足"的提示，全部试完都没命中时用它
-                if (pendingFeedback == null && !string.IsNullOrEmpty(rule.elseFeedback))
-                {
-                    pendingFeedback = rule.elseFeedback;
-                }
+                    TargetId = targetId,
+                    Verb = verb,
+                    UsedItemId = itemId,
+                    Matched = true,
+                    RuleNote = rule.note,
+                });
+                return true;
             }
 
-            if (!string.IsNullOrEmpty(pendingFeedback))
+            if (!string.IsNullOrEmpty(fallbackFeedback))
             {
-                EmitFeedback(targetId, pendingFeedback);
+                EmitFeedback(targetId, fallbackFeedback);
             }
 
             this.SendEvent(new PuzzleInteractionEvent
@@ -176,40 +146,8 @@ namespace ZF.Puzzle
             return false;
         }
 
-        private bool HasMatchingRule(string targetId, Verb verb, string itemId)
-        {
-            List<InteractionRule> rules = m_Table.interactionRules;
-            for (int i = 0; i < rules.Count; i++)
-            {
-                if (rules[i] != null && MatchesTarget(rules[i], targetId, verb, itemId))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool MatchesTarget(InteractionRule rule, string targetId, Verb verb, string itemId)
-        {
-            if (rule.verb != Verb.Any && rule.verb != verb)
-            {
-                return false;
-            }
-
-            if (!string.IsNullOrEmpty(rule.targetId) && rule.targetId != targetId)
-            {
-                return false;
-            }
-
-            // 规则指定了道具，那这条规则就只认「手里拿着那个道具去点」
-            if (!string.IsNullOrEmpty(rule.itemId) && (verb != Verb.UseItem || rule.itemId != itemId))
-            {
-                return false;
-            }
-
-            return true;
-        }
+        private bool HasMatchingRule(string targetId, Verb verb, string itemId) =>
+            PuzzleRuleMatcher.HasMatch(m_Table.interactionRules, targetId, verb, itemId);
 
         // ===================== 效果 =====================
 
@@ -425,6 +363,8 @@ namespace ZF.Puzzle
                 Verb = verb,
                 UsedItemId = itemId ?? "",
                 State = model,
+                Characters = this.GetModel<ICharacterModel>(),
+                CharacterOps = this.GetArchitecture().GetSystem<ICharacterSystem>(),
                 FocusedEraIndex = eraModel != null ? eraModel.FocusedIndex.Value : -1,
                 Feedback = message => EmitFeedback(target, message),
                 SolvePuzzle = SolvePuzzle,

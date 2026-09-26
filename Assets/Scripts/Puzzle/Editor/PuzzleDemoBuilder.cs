@@ -25,13 +25,17 @@ namespace ZF.Puzzle.EditorTools
         private const string EraRootName = "EraWorld";
 
         private const string InteractablePrefix = "Interactable_";
+        private const string CharacterPrefix = "Character_";
         private const string HaloName = "HoverHalo";
+
+        /// <summary>时间裂隙的物体 id。规则表里按 id 引用它。</summary>
+        private static string RiftId(EraId era) => "rift_" + era.ToString().ToLowerInvariant();
 
         // 层级：内容 0 / 地景 5 / 时代序号点 7 / 边框 10 / 锁-对勾 20（EraWindowSceneBuilder 定的）
         private const int HaloOrder = PuzzleSortingOrder.Halo;
 
         /// <summary>
-        /// ★ 同一个物体里**重叠的形状必须给递增的层级**（layer 参数）。
+        /// ★ 同一个东西里**重叠的形状必须给递增的层级**（layer 参数）。
         /// 层级相同又重叠时画的顺序是不确定的 —— 踩过的坑：壁炉本体和火苗同层级，
         /// 本体有时候盖在火苗上，表现成"石器时代点了火、壁炉却没火；有时候又有火；有时候只有下面一个火苗"。
         /// </summary>
@@ -46,6 +50,41 @@ namespace ZF.Puzzle.EditorTools
         private static readonly Color FlameHigh = new Color(1f, 0.82f, 0.36f, 1f);
         private static readonly Color HearthBody = new Color(0.30f, 0.30f, 0.36f, 1f);
         private static readonly Color HearthHole = new Color(0.09f, 0.09f, 0.12f, 1f);
+        private static readonly Color RiftDim = new Color(0.45f, 0.62f, 0.72f, 0.30f);
+        private static readonly Color RiftSoft = new Color(0.55f, 0.95f, 1f, 0.22f);
+        private static readonly Color RiftBright = new Color(0.72f, 0.98f, 1f, 1f);
+
+        // 人物。石器时代故意放**两个** —— 不然"只送一个人"和"整个时代一起走"看起来一模一样，分不出区别。
+        private static readonly string[] CharacterIds = { "ayan", "ashi", "tong", "deng", "ling" };
+
+        private static readonly string[] CharacterNames = { "阿岩", "阿石", "老铜", "小灯", "零" };
+
+        private static readonly EraId[] CharacterHomes =
+        {
+            EraId.Stone,        // 阿岩
+            EraId.Stone,        // 阿石
+            EraId.Steam,        // 老铜
+            EraId.Electric,     // 小灯
+            EraId.Information,  // 零
+        };
+
+        private static readonly string[] CharacterLines =
+        {
+            "阿岩：「火得有人守着。别的年头，我也想去看看。」",
+            "阿石：「我跟你一块儿去，路上有个照应。」",
+            "老铜：「齿轮转起来了，就差一口热气。」",
+            "小灯：「灯是亮的，可线是断的。」",
+            "零：「信号里有人，一直在重复同一句话。」",
+        };
+
+        private static readonly Color[] CharacterColors =
+        {
+            new Color(0.80f, 0.50f, 0.30f, 1f),
+            new Color(0.62f, 0.44f, 0.34f, 1f),
+            new Color(0.78f, 0.62f, 0.24f, 1f),
+            new Color(0.32f, 0.68f, 0.84f, 1f),
+            new Color(0.62f, 0.50f, 0.88f, 1f),
+        };
 
         // ===================== 菜单 =====================
 
@@ -64,12 +103,18 @@ namespace ZF.Puzzle.EditorTools
                 return;
             }
 
-            EraWindow stone = FindWindow(EraId.Stone);
-            EraWindow information = FindWindow(EraId.Information);
-            if (stone == null || information == null)
+            // 每个时代都要有人物和一个时间裂隙，所以四个窗口都得在
+            List<EraWindow> windows = new List<EraWindow>();
+            for (int i = 0; i < EraCatalog.All.Length; i++)
             {
-                Debug.LogError("[谜题] 找不到石器时代 / 信息时代的窗口。先重搭一次四个时代窗口。");
-                return;
+                EraWindow window = FindWindow(EraCatalog.All[i].id);
+                if (window == null)
+                {
+                    Debug.LogError($"[谜题] 找不到「{EraCatalog.All[i].title}」的窗口。先跑一次 Tools/时代窗口/搭建四个时代窗口场景。");
+                    return;
+                }
+
+                windows.Add(window);
             }
 
             Sprite white = EraWindowSceneBuilder.EnsureWhiteSprite();
@@ -81,21 +126,62 @@ namespace ZF.Puzzle.EditorTools
 
             ClearDemoObjects();
 
-            PuzzleTableSO table = EnsureTable(false);
+            // 规则表：老版本的表里没有人物/裂隙那些规则（或没有"点名"），场景搭好了也点不动 —— 检测到就直接重建。
+            // （平时表是新的就不动它，免得把你在 Inspector 里改过的规则冲掉）
+            PuzzleTableSO existing = AssetDatabase.LoadAssetAtPath<PuzzleTableSO>(TablePath);
+            bool stale = existing != null &&
+                         (!HasRuleFor(existing, RiftId(EraId.Stone)) || !HasEffect<SelectCharacterEffect>(existing));
 
-            BuildRock(stone.transform, white);
-            BuildWoodpile(stone.transform, white);
-            BuildHearth(information.transform, white);
+            PuzzleTableSO table = EnsureTable(stale);
+            if (stale)
+            {
+                Debug.Log("[谜题] 演示规则表是旧版本的（没有人物/时间裂隙/点名的规则），已按新演示内容重建 —— " +
+                          "你在 Inspector 里改过的演示规则被覆盖了。");
+            }
+
+            // 物件（windows[i] 的 i 就是 (int)EraId，和 EraWorldController 排序后的窗口序号是同一个约定）
+            BuildRock(windows[(int)EraId.Stone].transform, white);
+            BuildWoodpile(windows[(int)EraId.Stone].transform, white);
+            BuildHearth(windows[(int)EraId.Information].transform, white);
+
+            // 每个时代一个时间裂隙
+            for (int i = 0; i < windows.Count; i++)
+            {
+                BuildRift(windows[i].transform, EraCatalog.All[i].id, white);
+            }
+
+            // 人物：按各自的 homeEra 挂到对应窗口下面。同代多个人在编辑器里也按运行时那套公式错开。
+            int[] eraCounts = new int[EraCatalog.All.Length];
+            int[] eraCursor = new int[EraCatalog.All.Length];
+            for (int i = 0; i < CharacterIds.Length; i++)
+            {
+                eraCounts[(int)CharacterHomes[i]]++;
+            }
+
+            for (int i = 0; i < CharacterIds.Length; i++)
+            {
+                int eraIndex = (int)CharacterHomes[i];
+                int slot = eraCursor[eraIndex]++;
+                float x = (slot - (eraCounts[eraIndex] - 1) * 0.5f) * 0.70f;
+
+                BuildCharacter(windows[eraIndex].transform, i, new Vector3(x, -0.70f, 0f), white);
+            }
+
             BuildRoot(table);
 
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
             AssetDatabase.SaveAssets();
 
-            Debug.Log("[谜题] 解密演示搭好了。按 Play，然后：\n" +
-                      "  1. 点石器时代窗口进去 → 点左上角那块**岩壁** → 拿到「燧石」（Console 会说）\n" +
-                      "  2. 按 Tab 把燧石拿在手里 → 点右边的**柴堆** → 火着了，石器时代窗口亮对勾\n" +
-                      "  3. ESC 回全景 → 进信息时代 → **壁炉自己烧起来了**（石器时代点的火）\n" +
-                      $"  规则表在 {TablePath}，改规则不用改代码。");
+            Debug.Log("[谜题] 解密演示搭好了。石器时代有**两个人**（阿岩、阿石），其余每个时代一个人；每个时代还有一个**时间裂隙**。\n" +
+                      "  按 Play，然后：\n" +
+                      "  1. 进石器时代 → 点岩壁拿「燧石」→ Tab 拿在手里 → 点柴堆点火\n" +
+                      "     （火一起，四个时代的裂隙同时张开；石器时代窗口亮对勾）\n" +
+                      "  2. 【单独送一个人】点**阿岩**（他被点名，身上会亮框）→ 点**时间裂隙** → 只有他一个人过去，阿石留下\n" +
+                      "  3. 【整个时代一起走】点阿岩再点一次取消点名 → 点**时间裂隙** → 石器时代的人一起过去\n" +
+                      "  4. 进蒸汽时代看：阿岩/阿石站在老铜旁边，三个人自动分开站好\n" +
+                      "     （「蒸汽时代里有两个人」这个谜题这时会自己完成 → 演示「一起解密」的判定）\n" +
+                      "  5. 回全景进信息时代 → **壁炉自己烧起来了**（石器时代点的火）\n" +
+                      "  点人物 = 点名/取消点名（也会说一句台词）。规则表在 " + TablePath + "，改规则不用改代码。");
         }
 
         [MenuItem("Tools/谜题/清掉解密演示", false, 21)]
@@ -225,7 +311,149 @@ namespace ZF.Puzzle.EditorTools
             Finish(target, "hearth", EraId.Information, "壁炉", "cold", groups, rules, window, all, white);
         }
 
+        /// <summary>
+        /// 一个人物。这里的 localPosition 只是"编辑器里先摆在这儿"，运行时 CharacterView 会按
+        /// 「这个时代现在有几个人」自动重新排站位（所以搬走/搬来之后剩下的人会自己站好）。
+        /// </summary>
+        private static void BuildCharacter(Transform window, int index, Vector3 previewPosition, Sprite white)
+        {
+            string id = CharacterIds[index];
+            Color body = CharacterColors[index];
+            Color head = Color.Lerp(body, Color.white, 0.35f);
+
+            GameObject go = new GameObject(CharacterPrefix + id);
+            go.transform.SetParent(window, false);
+            go.transform.localPosition = previewPosition;
+
+            CharacterView view = go.AddComponent<CharacterView>();
+            BoxCollider2D hitArea = go.AddComponent<BoxCollider2D>();
+            hitArea.isTrigger = true;
+
+            // 火柴人：两条腿 + 身子 + 脑袋。腿 0/1、身子 2、脑袋 3 —— 递增层级，重叠也不会画得不确定
+            List<SpriteRenderer> shapes = new List<SpriteRenderer>
+            {
+                CreateCharacterShape(go.transform, "LegA", new Vector2(-0.085f, -0.44f), new Vector2(0.11f, 0.36f), body, white, 0),
+                CreateCharacterShape(go.transform, "LegB", new Vector2(0.085f, -0.44f), new Vector2(0.11f, 0.36f), body, white, 1),
+                CreateCharacterShape(go.transform, "Body", new Vector2(0f, -0.04f), new Vector2(0.38f, 0.48f), body, white, 2),
+                CreateCharacterShape(go.transform, "Head", new Vector2(0f, 0.36f), new Vector2(0.30f, 0.30f), head, white, 3),
+            };
+
+            List<StateGroup> groups = new List<StateGroup>
+            {
+                new StateGroup { state = PuzzleStates.Default, objects = ToObjects(shapes) },
+            };
+
+            // 人物会在时代之间搬家，所以高亮框必须挂在**人物自己**身上（挂在窗口上就不会跟着走了）
+            SpriteRenderer halo = CreateHalo(go.transform, shapes, white);
+
+            SerializedObject so = new SerializedObject(view);
+            SetString(so, "characterId", id);
+            SetString(so, "displayName", CharacterNames[index]);
+            SetInt(so, "homeEra", (int)CharacterHomes[index]);
+            SetRef(so, "hitArea", hitArea);
+            SetRef(so, "hoverFrame", halo);
+            WriteStateGroups(so, groups);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// 一个时代里的时间裂隙。做成一开一闭两个状态：
+        /// 这个时代通关了（演示里用全局 flag fire_lit 当门槛）它就张开，点它把这个时代的人整体送到下一个时代。
+        /// </summary>
+        private static void BuildRift(Transform window, EraId era, Sprite white)
+        {
+            string id = RiftId(era);
+            Interactable target = CreateInteractable(window, id, era, "时间裂隙");
+
+            List<SpriteRenderer> closed = new List<SpriteRenderer>
+            {
+                Create(target.transform, "RiftDim", new Vector2(2.55f, 1.15f), new Vector2(0.34f, 0.86f), RiftDim, white, 0),
+            };
+
+            // 光晕 0 < 裂缝 1/2/3 —— 递增
+            List<SpriteRenderer> open = new List<SpriteRenderer>
+            {
+                Create(target.transform, "RiftGlow", new Vector2(2.55f, 1.15f), new Vector2(0.62f, 1.22f), RiftSoft, white, 0),
+                Create(target.transform, "CrackA", new Vector2(2.47f, 1.30f), new Vector2(0.13f, 0.34f), RiftBright, white, 1),
+                Create(target.transform, "CrackB", new Vector2(2.63f, 1.04f), new Vector2(0.13f, 0.32f), RiftBright, white, 2),
+                Create(target.transform, "CrackC", new Vector2(2.51f, 0.83f), new Vector2(0.13f, 0.26f), RiftBright, white, 3),
+            };
+
+            List<StateGroup> groups = new List<StateGroup>
+            {
+                new StateGroup { state = "closed", objects = ToObjects(closed) },
+                new StateGroup { state = "open", objects = ToObjects(open) },
+            };
+
+            SetGroupActive(groups[1], false);
+
+            // 四个时代的裂隙读的是同一个全局 flag，所以火烧起来时它们会一起张开 ——
+            // 这本身就是"状态共享"的又一个例子。正式内容里换成每个时代自己的通关 flag。
+            List<VisualStateRule> rules = new List<VisualStateRule>
+            {
+                new VisualStateRule
+                {
+                    note = "火种出现了，裂隙就能感觉到",
+                    state = "open",
+                    conditions = Conditions(FlagOn("fire_lit")),
+                },
+            };
+
+            List<SpriteRenderer> all = new List<SpriteRenderer>(closed);
+            all.AddRange(open);
+
+            Finish(target, id, era, "时间裂隙", "closed", groups, rules, window, all, white);
+        }
+
         // ===================== 规则表 =====================
+
+        /// <summary>表里有没有针对某个目标的规则。用来判断这张表是不是旧版本搭出来的。</summary>
+        private static bool HasRuleFor(PuzzleTableSO table, string targetId)
+        {
+            if (table == null || table.interactionRules == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < table.interactionRules.Count; i++)
+            {
+                InteractionRule rule = table.interactionRules[i];
+                if (rule != null && rule.targetId == targetId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>表里有没有用到某种效果。用来判断这张表是不是旧版本搭出来的。</summary>
+        private static bool HasEffect<T>(PuzzleTableSO table) where T : PuzzleEffect
+        {
+            if (table == null || table.interactionRules == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < table.interactionRules.Count; i++)
+            {
+                InteractionRule rule = table.interactionRules[i];
+                if (rule?.effects == null)
+                {
+                    continue;
+                }
+
+                for (int j = 0; j < rule.effects.Count; j++)
+                {
+                    if (rule.effects[j] is T)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
 
         /// <summary>表已经存在就不动它 —— 免得把你在 Inspector 里改过的规则冲掉。</summary>
         private static PuzzleTableSO EnsureTable(bool forceRebuild)
@@ -267,7 +495,7 @@ namespace ZF.Puzzle.EditorTools
             const string Hearth = "hearth";
             const string Flint = "flint";
 
-            return new List<InteractionRule>
+            List<InteractionRule> rules = new List<InteractionRule>
             {
                 new InteractionRule
                 {
@@ -329,6 +557,94 @@ namespace ZF.Puzzle.EditorTools
                     effects = Effects(new FeedbackEffect { message = "壁炉是冷的，一根柴都没有。" }),
                 },
             };
+
+            // ---- 人物：点他 = **点名**（再点一次取消），顺便说一句台词 ----
+            // 点名的那个就是"单独送走"的对象，见下面时间裂隙的第 1 条规则。
+            for (int i = 0; i < CharacterIds.Length; i++)
+            {
+                rules.Add(new InteractionRule
+                {
+                    note = $"人物 {CharacterNames[i]}：已经点着他了 → 再点一次取消（条件在前）",
+                    targetId = CharacterIds[i],
+                    verb = Verb.Interact,
+                    conditions = Conditions(new SelectedCharacterCondition { characterId = CharacterIds[i] }),
+                    effects = Effects(
+                        new SelectCharacterEffect(),
+                        new FeedbackEffect { message = $"取消点名{CharacterNames[i]}。" }),
+                });
+
+                rules.Add(new InteractionRule
+                {
+                    note = $"人物 {CharacterNames[i]}：点名",
+                    targetId = CharacterIds[i],
+                    verb = Verb.Interact,
+                    conditions = Conditions(),
+                    effects = Effects(
+                        new SelectCharacterEffect { characterId = CharacterIds[i] },
+                        new FeedbackEffect { message = $"点名{CharacterNames[i]}。{CharacterLines[i]}" }),
+                });
+            }
+
+            // ---- 时间裂隙：每个时代一个。三条路，条件从特殊到通用 ----
+            for (int i = 0; i < EraCatalog.All.Length; i++)
+            {
+                EraId era = EraCatalog.All[i].id;
+                EraId next = EraCatalog.Next(era);
+                string eraTitle = EraCatalog.Get(era).title;
+                string nextTitle = EraCatalog.Get(next).title;
+
+                // ① 点名了人、而且那个人就在这个时代 → **只送他一个人**
+                rules.Add(new InteractionRule
+                {
+                    note = $"时间裂隙：只送点名的那个人 {eraTitle} → {nextTitle}",
+                    targetId = RiftId(era),
+                    verb = Verb.Interact,
+                    // 条件顺序无所谓（全都要满足），关键是这条规则要排在"全体走"前面
+                    conditions = Conditions(FlagOn("fire_lit"), new SelectedCharacterInEraCondition { era = era }),
+                    effects = Effects(
+                        new MoveSelectedCharacterEffect { targetEra = next },
+                        new FeedbackEffect { message = $"你点名的那个人一个人跨进了{nextTitle}。" }),
+                });
+
+                // ② 没点名（或点名的人不在这个时代），这个时代有人 → **整个时代一起走**
+                rules.Add(new InteractionRule
+                {
+                    note = $"时间裂隙：整个 {eraTitle} 一起走 → {nextTitle}",
+                    targetId = RiftId(era),
+                    verb = Verb.Interact,
+                    conditions = Conditions(FlagOn("fire_lit"), new CharacterCountInEraCondition
+                    {
+                        era = era,
+                        op = FlagOp.GreaterOrEqual,
+                        count = 1f,
+                    }),
+                    effects = Effects(
+                        new MoveEraCharactersEffect { fromEra = era, targetEra = next },
+                        new FeedbackEffect { message = $"{eraTitle}的人一起跨进了{nextTitle}的窗口。" }),
+                });
+
+                // ③ 裂隙开着但这个时代没人
+                rules.Add(new InteractionRule
+                {
+                    note = "时间裂隙：这个时代没人",
+                    targetId = RiftId(era),
+                    verb = Verb.Interact,
+                    conditions = Conditions(FlagOn("fire_lit")),
+                    effects = Effects(new FeedbackEffect { message = $"{eraTitle}里已经没有人了。" }),
+                });
+
+                // ④ 兜底：裂隙还闭着（必须排最后）
+                rules.Add(new InteractionRule
+                {
+                    note = "时间裂隙：还闭着（兜底，必须排在后面）",
+                    targetId = RiftId(era),
+                    verb = Verb.Interact,
+                    conditions = Conditions(),
+                    effects = Effects(new FeedbackEffect { message = "裂隙还闭着。得先让这个年头的火点起来。" }),
+                });
+            }
+
+            return rules;
         }
 
         private static List<PuzzleDefinition> BuildPuzzles()
@@ -360,6 +676,21 @@ namespace ZF.Puzzle.EditorTools
                     era = EraId.Information,
                     conditions = Conditions(FlagOn("hearth_lit")),
                     onSolved = Effects(new FeedbackEffect { message = "（谜题完成）现代壁炉的火，是石器时代点起来的。" }),
+                    isMainPuzzle = false,
+                },
+                new PuzzleDefinition
+                {
+                    // 这就是「两个人凑到同一个时代才能一起解密」的判定
+                    id = "P_two_together",
+                    title = "两个人凑在一起",
+                    era = EraId.Steam,
+                    conditions = Conditions(new CharacterCountInEraCondition
+                    {
+                        era = EraId.Steam,
+                        op = FlagOp.GreaterOrEqual,
+                        count = 2f,
+                    }),
+                    onSolved = Effects(new FeedbackEffect { message = "（谜题完成）蒸汽时代里凑齐了两个人 —— 可以一起动手了。" }),
                     isMainPuzzle = false,
                 },
             };
@@ -442,7 +773,9 @@ namespace ZF.Puzzle.EditorTools
                 for (int c = parent.childCount - 1; c >= 0; c--)
                 {
                     GameObject child = parent.GetChild(c).gameObject;
-                    if (child.name.StartsWith(InteractablePrefix) || child.name == HaloName)
+                    if (child.name.StartsWith(InteractablePrefix) ||
+                        child.name.StartsWith(CharacterPrefix) ||
+                        child.name == HaloName)
                     {
                         Undo.DestroyObjectImmediate(child);
                     }
@@ -474,6 +807,12 @@ namespace ZF.Puzzle.EditorTools
             Color color, Sprite white, int layer) =>
             EraWindowSceneBuilder.CreateRect(parent, name, center, size, color, ShapeOrder(layer), white);
 
+        /// <summary>人物的形状：层级从 CharacterBase 起（比物件高，人站前面）。</summary>
+        private static SpriteRenderer CreateCharacterShape(Transform parent, string name, Vector2 center, Vector2 size,
+            Color color, Sprite white, int layer) =>
+            EraWindowSceneBuilder.CreateRect(parent, name, center, size, color,
+                PuzzleSortingOrder.CharacterBase + layer, white);
+
         private static List<GameObject> ToObjects(List<SpriteRenderer> shapes)
         {
             List<GameObject> objects = new List<GameObject>(shapes.Count);
@@ -501,7 +840,11 @@ namespace ZF.Puzzle.EditorTools
             }
         }
 
-        private static SpriteRenderer CreateHalo(Transform window, List<SpriteRenderer> shapes, Sprite white)
+        /// <summary>
+        /// 在 parent 下面画一个包住这些形状的高亮框。
+        /// 物件的高亮框挂在窗口上（物件不会动）；**人物**的要挂在人物自己身上（人会跨窗口搬，挂在窗口上就不会跟着走）。
+        /// </summary>
+        private static SpriteRenderer CreateHalo(Transform parent, List<SpriteRenderer> shapes, Sprite white)
         {
             bool has = false;
             Bounds bounds = default;
@@ -529,10 +872,10 @@ namespace ZF.Puzzle.EditorTools
                 return null;
             }
 
-            Vector3 center = window.InverseTransformPoint(bounds.center);
-            Vector3 size = window.InverseTransformVector(bounds.size);
+            Vector3 center = parent.InverseTransformPoint(bounds.center);
+            Vector3 size = parent.InverseTransformVector(bounds.size);
 
-            SpriteRenderer halo = EraWindowSceneBuilder.CreateRect(window, HaloName,
+            SpriteRenderer halo = EraWindowSceneBuilder.CreateRect(parent, HaloName,
                 new Vector2(center.x, center.y),
                 new Vector2(Mathf.Abs(size.x) + 0.22f, Mathf.Abs(size.y) + 0.22f),
                 new Color(1f, 1f, 1f, 0.18f), HaloOrder, white);

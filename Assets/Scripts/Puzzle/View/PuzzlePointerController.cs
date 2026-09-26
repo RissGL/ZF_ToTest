@@ -31,8 +31,7 @@ namespace ZF.Puzzle
 
         private IPuzzleModel m_Model;
         private IEraWindowModel m_EraModel;
-        private Interactable m_Hovered;
-
+        private StateVisualBehaviour m_Hovered;
         public IArchitecture GetArchitecture() => GameApp.Interface;
 
         private void Awake()
@@ -77,11 +76,11 @@ namespace ZF.Puzzle
             Vector2 screenPoint = mouse.position.ReadValue();
             Vector3 worldPoint = mainCamera.ScreenToWorldPoint(new Vector3(screenPoint.x, screenPoint.y, 0f));
 
-            SetHovered(PickInteractable(worldPoint));
+            SetHovered(PickBehaviour(worldPoint));
 
             if (mouse.leftButton.wasPressedThisFrame && m_Hovered != null)
             {
-                this.SendCommand(new InteractCommand(m_Hovered.Id));
+                this.SendCommand(new InteractCommand(m_Hovered.InteractionId));
             }
 
             Keyboard keyboard = Keyboard.current;
@@ -91,7 +90,7 @@ namespace ZF.Puzzle
             }
         }
 
-        private Interactable PickInteractable(Vector2 worldPoint)
+        private StateVisualBehaviour PickBehaviour(Vector2 worldPoint)
         {
             int count = Physics2D.OverlapPoint(worldPoint, PickFilter, m_PickResults);
 
@@ -103,18 +102,18 @@ namespace ZF.Puzzle
                     continue;
                 }
 
-                // 物体优先于它所在的时代窗口（窗口那个大 trigger 也盖着同一点）
-                Interactable interactable = collider.GetComponentInParent<Interactable>();
-                if (interactable != null)
+                // 物件 / 人物优先于它所在的时代窗口（窗口那个大 trigger 也盖着同一点）
+                StateVisualBehaviour behaviour = collider.GetComponentInParent<StateVisualBehaviour>();
+                if (behaviour != null)
                 {
-                    return interactable;
+                    return behaviour;
                 }
             }
 
             return null;
         }
 
-        private void SetHovered(Interactable next)
+        private void SetHovered(StateVisualBehaviour next)
         {
             if (m_Hovered == next)
             {
