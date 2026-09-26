@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using ZF.EraGallery;
 
 namespace ZF.Puzzle
 {
@@ -31,6 +32,28 @@ namespace ZF.Puzzle
         PreviousEra = 1,
     }
 
+    /// <summary>
+    /// 「这个时代」是哪个时代 —— 让条件和效果能引用**被点的那个目标所在的时代**。
+    ///
+    /// 有了它，"哪个裂隙、送到哪"就不用按时代写 4 遍：
+    /// 一条「任意裂隙：把点名的人送到它的下一个时代」就管四个裂隙。
+    /// 默认是 Absolute（写死的某个时代），所以老数据的含义一个字都不变。
+    /// </summary>
+    public enum EraRef
+    {
+        /// <summary>写死的那个时代（用 era 字段）。</summary>
+        Absolute = 0,
+
+        /// <summary>被点的目标所在的时代。</summary>
+        TargetEra = 1,
+
+        /// <summary>被点的目标所在时代的**下一个**（送人往前走）。</summary>
+        TargetEraNext = 2,
+
+        /// <summary>被点的目标所在时代的上一个（送人往回走）。</summary>
+        TargetEraPrevious = 3,
+    }
+
     /// <summary>flag 比较方式。bool 也走这套：0 = 假，其它 = 真。</summary>
     public enum FlagOp
     {
@@ -47,6 +70,86 @@ namespace ZF.Puzzle
     {
         /// <summary>默认状态。物体没被 SetObjectState 改过、也没有状态规则命中时用它。</summary>
         public const string Default = "default";
+    }
+
+    /// <summary>
+    /// 目标的**类别**：规则可以按类别一次管一批东西（`@rift` 管四个裂隙），
+    /// 不用给每个裂隙各写一条。类别名是自由字符串，写在物体自己身上。
+    /// </summary>
+    public static class PuzzleCategories
+    {
+        /// <summary>普通物体（没特别标类别的都算这个）。</summary>
+        public const string Prop = "prop";
+
+        /// <summary>人物。CharacterView 自动属于这一类（框架级的，不用手填）。</summary>
+        public const string Character = "character";
+    }
+
+    /// <summary>
+    /// 字段值里的**引用写法**。
+    ///
+    ///   ""        任意（哪个目标都行）—— 见 InteractionRule.targetId
+    ///   "@rift"   类别：目标属于这个类别才匹配
+    ///   "@self"   被点的那个目标自己（效果里"点名它自己"、条件里"点的是不是它自己"）
+    ///
+    /// 就靠一个 `@` 前缀，不新增字段 —— 编辑器里 id 旁边那个 ▾ 会把 `@…` 和真实 id 一起列出来，
+    /// 校验也会检查"这个类别在场景里存不存在"，所以不用担心打错字。
+    /// </summary>
+    public static class PuzzleRef
+    {
+        public const string Prefix = "@";
+
+        /// <summary>被点的那个目标自己。</summary>
+        public const string Self = "@self";
+
+        public static bool IsSelf(string value) =>
+            string.Equals(value ?? "", Self, StringComparison.Ordinal);
+
+        /// <summary>是不是类别引用（`@xxx`，且不是 @self）。</summary>
+        public static bool IsCategory(string value) =>
+            !string.IsNullOrEmpty(value) &&
+            value.StartsWith(Prefix, StringComparison.Ordinal) &&
+            !IsSelf(value);
+
+        /// <summary>`@rift` → `rift`；不是类别引用时返回 ""。</summary>
+        public static string CategoryName(string value) =>
+            IsCategory(value) ? value.Substring(Prefix.Length) : "";
+
+        /// <summary>把 `@self` 换成被点的目标 id，其它值原样返回。</summary>
+        public static string ResolveSelf(string value, PuzzleContext context) =>
+            IsSelf(value) ? (context != null ? context.TargetId ?? "" : "") : value;
+
+        /// <summary>类别的显示写法：`rift` → `@rift`。</summary>
+        public static string CategoryRef(string category) => Prefix + (category ?? "");
+    }
+
+    /// <summary>时代引用的解算：把 EraRef 变成"这一时刻的那个时代"。</summary>
+    public static class PuzzleEraRef
+    {
+        public static EraId Resolve(EraRef eraRef, PuzzleContext context, EraId absolute)
+        {
+            EraId target = context != null ? context.TargetEra : absolute;
+
+            switch (eraRef)
+            {
+                case EraRef.TargetEra: return target;
+                case EraRef.TargetEraNext: return EraCatalog.Next(target);
+                case EraRef.TargetEraPrevious: return EraCatalog.Previous(target);
+                default: return absolute;
+            }
+        }
+
+        /// <summary>表单 / 日志里的说法。</summary>
+        public static string Text(EraRef eraRef)
+        {
+            switch (eraRef)
+            {
+                case EraRef.TargetEra: return "被点目标所在的时代";
+                case EraRef.TargetEraNext: return "它所在时代的下一个";
+                case EraRef.TargetEraPrevious: return "它所在时代的上一个";
+                default: return "指定时代";
+            }
+        }
     }
 
     /// <summary>
@@ -129,6 +232,12 @@ namespace ZF.Puzzle
         /// <summary>被点的物体 / 人物的 id。</summary>
         public string TargetId = "";
 
+        /// <summary>被点的目标属于哪个类别（prop / character / rift…）。条件里的 `@类别` 目标和它比。</summary>
+        public string TargetCategory = "";
+
+        /// <summary>被点的目标现在在哪个时代。人物问人物模型，物体问登记表。</summary>
+        public EraId TargetEra = EraId.Stone;
+
         /// <summary>玩家做的动作。</summary>
         public Verb Verb = Verb.Any;
 
@@ -155,5 +264,68 @@ namespace ZF.Puzzle
 
         /// <summary>走 PuzzleSystem 的正式流程完成一个谜题（会跑完成效果、发事件、必要时判定时代通关）。</summary>
         public Action<string> SolvePuzzle;
+    }
+
+    /// <summary>
+    /// 规则文案里的占位符。
+    ///
+    /// 一条规则现在要管一批目标（"任意人物""任意裂隙"），所以那句话不能再写死名字，
+    /// 得能引用**这一次点的是谁**。八个占位符，写在任何一句给玩家看的话里都能用：
+    ///
+    ///   {目标}    被点的那个东西的 id（rift_stone）
+    ///   {目标名}  它的显示名（时间裂隙）
+    ///   {人物}    当前点名的人物 id
+    ///   {人物名}  他的显示名（阿岩）
+    ///   {这里}    被点的目标所在时代（石器时代）
+    ///   {下一个}  它所在时代的下一个（蒸汽时代）
+    ///   {上一个}  它所在时代的上一个
+    ///
+    /// 认不出来的花括号原样留着（当普通文字），所以写 JSON 之类的东西不会被吃掉。
+    /// </summary>
+    public static class PuzzleText
+    {
+        public static string Format(string template, PuzzleContext context)
+        {
+            if (string.IsNullOrEmpty(template) || context == null || template.IndexOf('{') < 0)
+            {
+                return template ?? "";
+            }
+
+            string text = template;
+
+            text = Replace(text, "{目标名}", NameOf(context, context.TargetId));
+            text = Replace(text, "{目标说}", Speech(context, context.TargetId));
+            text = Replace(text, "{目标}", context.TargetId);
+            text = Replace(text, "{人物名}", NameOf(context, SelectedCharacter(context)));
+            text = Replace(text, "{人物说}", Speech(context, SelectedCharacter(context)));
+            text = Replace(text, "{人物}", SelectedCharacter(context));
+            text = Replace(text, "{这里}", EraTitle(context.TargetEra));
+            text = Replace(text, "{下一个}", EraTitle(EraCatalog.Next(context.TargetEra)));
+            text = Replace(text, "{上一个}", EraTitle(EraCatalog.Previous(context.TargetEra)));
+
+            return text;
+        }
+
+        private static string SelectedCharacter(PuzzleContext context) =>
+            context.Characters != null ? context.Characters.SelectedCharacter.Value ?? "" : "";
+
+        private static string NameOf(PuzzleContext context, string id)
+        {
+            if (string.IsNullOrEmpty(id))
+            {
+                return "";
+            }
+
+            string name = context.State != null ? context.State.GetTargetDisplayName(id) : "";
+            return string.IsNullOrEmpty(name) ? id : name;
+        }
+
+        private static string Speech(PuzzleContext context, string id) =>
+            context.State != null && !string.IsNullOrEmpty(id) ? context.State.GetTargetSpeech(id) : "";
+
+        private static string EraTitle(EraId era) => EraCatalog.Get(era).title;
+
+        private static string Replace(string text, string token, string value) =>
+            text.Replace(token, value ?? "");
     }
 }

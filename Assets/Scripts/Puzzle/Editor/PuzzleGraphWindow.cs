@@ -13,7 +13,9 @@ namespace ZF.Puzzle.EditorTools
     ///
     /// 一个窗口干完原来的两件事：
     ///   · 看关系（谁写了 flag、谁读它、跨时代那条链、死锁）
-    ///   · 改规则（选中规则节点 → 右侧直接编辑；上移/下移就是改优先级）
+    ///   · 改规则（选中规则节点 → 右侧直接编辑；优先级用表单顶部的 ▲▼ 改）
+    ///
+    /// **图上没有任何自动重排**：拖到哪就留在哪，重建也只给新节点找空位。想重排得手动点「重新布局」。
     ///
     /// 菜单：Tools → 谜题 → 谜题图
     /// </summary>
@@ -58,6 +60,10 @@ namespace ZF.Puzzle.EditorTools
         private bool m_ShowPuzzles = true;
         private bool m_ShowEras = false;
 
+        /// <summary>「读」的线默认不画：一个 flag 会被 N 条规则当门槛，画出来就是一团。
+        /// 改成「选中 flag 节点 → 右侧列出读它的规则」。想追依赖时把工具栏那个开关打开。</summary>
+        private bool m_ShowReadEdges = false;
+
         [MenuItem("Tools/谜题/谜题图", false, 30)]
         public static void Open()
         {
@@ -82,8 +88,10 @@ namespace ZF.Puzzle.EditorTools
             m_Graph = new PuzzleGraphView();
             m_Graph.style.flexGrow = 1f;
 
-            // 拖规则节点上下 = 改优先级（松手时重排）
-            m_Graph.RegisterCallback<MouseUpEvent>(OnGraphMouseUp, TrickleDown.TrickleDown);
+            // 注意：这里**不要**挂 MouseUp 之类的"松手就重排优先级"的钩子 ——
+            // 折行布局里 y 坐标不再等于优先级（第二列第一行和第一列第一行 y 一样），
+            // 按 y 重排会把规则表搅乱；而且每次重排都会 RebuildAll 清掉选中，面板就没法编辑了。
+            // 改优先级一律走右侧表单顶部的 ▲▼ 按钮。
 
             // 右键空白处 = 新建
             m_Graph.AddManipulator(new ContextualMenuManipulator(evt =>
@@ -178,6 +186,7 @@ namespace ZF.Puzzle.EditorTools
             {
                 s_Layout.Clear();
                 RebuildGraph();
+                m_Graph?.FrameAll();      // 重排完顺手框到能看全
             }));
             toolbar.Add(Button("居中", () => m_Graph?.FrameAll()));
 
@@ -188,6 +197,9 @@ namespace ZF.Puzzle.EditorTools
             toolbar.Add(Toggle("道具", m_ShowItems, v => { m_ShowItems = v; RebuildGraph(); }));
             toolbar.Add(Toggle("谜题", m_ShowPuzzles, v => { m_ShowPuzzles = v; RebuildGraph(); }));
             toolbar.Add(Toggle("时代", m_ShowEras, v => { m_ShowEras = v; RebuildGraph(); }));
+
+            // 「读」的线默认不画（太多太乱）：选中 flag 节点时右侧会列出读它的规则
+            toolbar.Add(Toggle("读的线", m_ShowReadEdges, v => { m_ShowReadEdges = v; RebuildGraph(); }));
 
             m_Summary = new Label();
             m_Summary.style.marginLeft = 8f;
@@ -285,74 +297,6 @@ namespace ZF.Puzzle.EditorTools
             }
         }
 
-        /// <summary>松手时按 y 位置给规则节点重排优先级（拖上拖下就是改顺序）。</summary>
-        private void OnGraphMouseUp(MouseUpEvent evt)
-        {
-            if (evt.button != 0 || m_Table == null || m_Graph == null || m_Graph.RuleNodes.Count < 2)
-            {
-                return;
-            }
-
-            List<KeyValuePair<int, float>> order = new List<KeyValuePair<int, float>>();
-            foreach (KeyValuePair<int, PuzzleGraphNode> pair in m_Graph.RuleNodes)
-            {
-                order.Add(new KeyValuePair<int, float>(pair.Key, pair.Value.GetPosition().y));
-            }
-
-            order.Sort((a, b) => a.Value.CompareTo(b.Value));
-
-            bool changed = false;
-            for (int i = 0; i < order.Count; i++)
-            {
-                if (order[i].Key != i)
-                {
-                    changed = true;
-                    break;
-                }
-            }
-
-            if (!changed)
-            {
-                return;
-            }
-
-            ApplyRuleOrder(order);
-        }
-
-        /// <summary>把规则数组按给定的原索引顺序重排（用 MoveArrayElement 做插入排序）。</summary>
-        private void ApplyRuleOrder(List<KeyValuePair<int, float>> order)
-        {
-            if (m_Serialized == null || m_Table == null || order.Count != m_Table.interactionRules.Count)
-            {
-                return;
-            }
-
-            m_Serialized.Update();
-            SerializedProperty rules = m_Serialized.FindProperty("interactionRules");
-
-            List<int> current = new List<int>();
-            for (int i = 0; i < order.Count; i++)
-            {
-                current.Add(i);
-            }
-
-            for (int i = 0; i < order.Count; i++)
-            {
-                int want = order[i].Key;
-                int at = current.IndexOf(want);
-
-                if (at != i && at >= 0)
-                {
-                    rules.MoveArrayElement(at, i);
-                    current.RemoveAt(at);
-                    current.Insert(i, want);
-                }
-            }
-
-            m_Serialized.ApplyModifiedProperties();
-            RebuildAll();
-        }
-
         // ===================== 扫描 / 重建 =====================
 
         // 关于 Undo：这里**故意不写** Undo.RecordObject。
@@ -403,7 +347,8 @@ namespace ZF.Puzzle.EditorTools
             }
 
             PuzzleGraphBuilder.Build(m_Graph, m_Table, m_Scan, s_Layout,
-                m_ShowObjects, m_ShowRules, m_ShowFlags, m_ShowItems, m_ShowPuzzles, m_ShowEras);
+                m_ShowObjects, m_ShowRules, m_ShowFlags, m_ShowItems, m_ShowPuzzles, m_ShowEras, m_ShowReadEdges,
+                Mathf.Max(320f, position.height - 60f));
 
             if (m_Summary != null)
             {
@@ -827,11 +772,25 @@ namespace ZF.Puzzle.EditorTools
         }
 
         /// <summary>这条规则读或写的任何东西，是不是 key 指的那个。</summary>
-        private static bool Touches(InteractionRule rule, string key)
+        private bool Touches(InteractionRule rule, string key)
         {
-            if (key.StartsWith("obj:") && rule.targetId == key.Substring(4))
+            if (key.StartsWith("obj:"))
             {
-                return true;
+                string id = key.Substring(4);
+
+                if (PuzzleOps.SameState(rule.targetId, id))
+                {
+                    return true;
+                }
+
+                // 目标是类别（`@rift`）的那条规则，也管着这个物体 —— 不然"和它有关的规则"会漏
+                if (PuzzleRef.IsCategory(rule.targetId) &&
+                    m_Scan != null &&
+                    m_Scan.CategoryOf.TryGetValue(id, out string category) &&
+                    PuzzleOps.SameState(PuzzleRef.CategoryName(rule.targetId), category))
+                {
+                    return true;
+                }
             }
 
             if (key.StartsWith("item:") && rule.itemId == key.Substring(5))
@@ -1151,6 +1110,9 @@ namespace ZF.Puzzle.EditorTools
 
             PuzzleSimulation simulation = new PuzzleSimulation();
             simulation.FocusedEraIndex = -1;
+
+            // 规则里的 `@类别` 和「它所在的时代」都要靠场景登记，不然试跑会说"没命中"
+            simulation.BindScene(m_Scan);
 
             Dictionary<string, float> flags = new Dictionary<string, float>();
             foreach (string flag in m_Scan.WrittenFlags)

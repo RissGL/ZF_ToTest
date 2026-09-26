@@ -22,6 +22,22 @@ namespace ZF.Puzzle.EditorTools
         public readonly HashSet<string> InteractionIds = new HashSet<string>();
 
         public readonly HashSet<string> CharacterIds = new HashSet<string>();
+
+        /// <summary>场景里出现过的类别（prop / character / rift…）。规则里的 `@类别` 从这儿挑。</summary>
+        public readonly HashSet<string> Categories = new HashSet<string>();
+
+        /// <summary>id → 类别。校验「@类别 到底盖住了谁」和排序提示都要用。</summary>
+        public readonly Dictionary<string, string> CategoryOf = new Dictionary<string, string>();
+
+        /// <summary>id → 显示名。给编辑器提示用。</summary>
+        public readonly Dictionary<string, string> DisplayNameOf = new Dictionary<string, string>();
+
+        /// <summary>id → 挂在它身上的一句额外文案（规则里的 {目标说}）。</summary>
+        public readonly Dictionary<string, string> SpeechOf = new Dictionary<string, string>();
+
+        /// <summary>id → 摆在哪个时代（物体；人物看 homeEra）。</summary>
+        public readonly Dictionary<string, EraId> EraOf = new Dictionary<string, EraId>();
+
         public readonly HashSet<string> WrittenFlags = new HashSet<string>();
         public readonly HashSet<string> ReadFlags = new HashSet<string>();
         public readonly HashSet<string> GivenItems = new HashSet<string>();
@@ -71,10 +87,26 @@ namespace ZF.Puzzle.EditorTools
     /// </summary>
     public static class PuzzleEditorScan
     {
+        /// <summary>引用的三种去处。</summary>
+        private enum RefKind
+        {
+            /// <summary>必须是场景里的物体 / 人物 id。</summary>
+            Interaction = 0,
+
+            /// <summary>必须是某个道具（得有人给过它）。</summary>
+            Item = 1,
+
+            /// <summary>`@类别` —— 场景里得有东西属于这个类别。</summary>
+            Category = 2,
+
+            /// <summary>`@self` —— 被点的那个目标，不用校验。</summary>
+            Self = 3,
+        }
+
         private struct Reference
         {
             public string Value;
-            public bool MustBeInteraction;   // true = 必须是场景里的东西；false = 必须是某个道具
+            public RefKind Kind;
             public int RuleIndex;
             public string Where;
         }
@@ -120,11 +152,20 @@ namespace ZF.Puzzle.EditorTools
                 if (!string.IsNullOrEmpty(id))
                 {
                     result.InteractionIds.Add(id);
+                    result.CategoryOf[id] = views[i].Category;
+                    result.DisplayNameOf[id] = views[i].DisplayName;
+                    result.SpeechOf[id] = views[i].Speech;
+                    result.Categories.Add(views[i].Category);
                 }
 
                 if (views[i] is CharacterView character)
                 {
                     result.CharacterIds.Add(character.CharacterId);
+                    result.EraOf[character.CharacterId] = character.HomeEra;
+                }
+                else if (views[i] is Interactable interactable && !string.IsNullOrEmpty(id))
+                {
+                    result.EraOf[id] = interactable.Era;
                 }
             }
         }
@@ -147,13 +188,7 @@ namespace ZF.Puzzle.EditorTools
 
                 if (!string.IsNullOrEmpty(rule.targetId))
                 {
-                    references.Add(new Reference
-                    {
-                        Value = rule.targetId,
-                        MustBeInteraction = true,
-                        RuleIndex = i,
-                        Where = "规则的目标",
-                    });
+                    AddTargetRef(references, rule.targetId, i, "规则的目标");
                 }
                 else if (rule.verb == Verb.UseItem)
                 {
@@ -162,13 +197,7 @@ namespace ZF.Puzzle.EditorTools
 
                 if (!string.IsNullOrEmpty(rule.itemId))
                 {
-                    references.Add(new Reference
-                    {
-                        Value = rule.itemId,
-                        MustBeInteraction = false,
-                        RuleIndex = i,
-                        Where = "规则要求用的道具",
-                    });
+                    AddItemRef(references, rule.itemId, i, "规则要求用的道具");
                 }
 
                 for (int c = 0; c < rule.conditions.Count; c++)
@@ -196,32 +225,53 @@ namespace ZF.Puzzle.EditorTools
             for (int i = 0; i < rules.Count; i++)
             {
                 InteractionRule rule = rules[i];
-                if (rule == null || rule.conditions.Count != 0)
-                {
-                    continue;
-                }
-
-                bool onlyFeedback = rule.effects.Count == 1 && rule.effects[0] is FeedbackEffect;
-                if (!onlyFeedback)
+                if (!IsOnlyFeedback(rule))
                 {
                     continue;
                 }
 
                 // 上面有没有同类（同目标同动作）的规则？有的话它就是纯兜底，直接并上去
-                int sameTargetAbove = -1;
-                for (int j = 0; j < i; j++)
-                {
-                    if (Covers(rules[j], rule) || Covers(rule, rules[j]))
-                    {
-                        sameTargetAbove = j;
-                        break;
-                    }
-                }
+                int sameTargetAbove = FindCoveringRuleAbove(rules, i, result);
 
                 result.Add(i, false, sameTargetAbove >= 0
                     ? $"这条只是兜底提示，不用单拉一条 —— 把这句话填到第 {sameTargetAbove + 1} 条的「条件不满足时，对玩家说」里就行。"
                     : "这条只是「点它没反应时说一句话」—— 建议改成填在物体自己的「空手点它时的默认提示」上，规则表里就少一行。");
             }
+        }
+
+        /// <summary>「无条件 + 效果只有一个提示」—— 这条规则除了说句话什么都没干。</summary>
+        public static bool IsOnlyFeedback(InteractionRule rule) =>
+            rule != null &&
+            rule.conditions != null && rule.conditions.Count == 0 &&
+            rule.effects != null && rule.effects.Count == 1 && rule.effects[0] is FeedbackEffect;
+
+        /// <summary>
+        /// 第 index 条上面有没有「能匹配到它全部点击」的规则（同目标同动作，认得 `@类别`）。有 → 它就是个纯兜底，
+        /// 那句话并到上面那条的 elseFeedback 里就行。演示搭建器判「旧表」用的也是这个判断。
+        /// </summary>
+        public static int FindCoveringRuleAbove(List<InteractionRule> rules, int index,
+            PuzzleScanResult result = null)
+        {
+            if (rules == null || index < 0 || index >= rules.Count)
+            {
+                return -1;
+            }
+
+            InteractionRule rule = rules[index];
+            if (rule == null)
+            {
+                return -1;
+            }
+
+            for (int j = 0; j < index; j++)
+            {
+                if (Covers(rules[j], rule, result) || Covers(rule, rules[j], result))
+                {
+                    return j;
+                }
+            }
+
+            return -1;
         }
 
         /// <summary>「上面那条无条件规则会不会把它吃干净」—— 规则表最常见的坑就是把兜底写前面了。</summary>
@@ -238,7 +288,7 @@ namespace ZF.Puzzle.EditorTools
                 for (int j = 0; j < i; j++)
                 {
                     InteractionRule earlier = rules[j];
-                    if (earlier == null || !Covers(earlier, later))
+                    if (earlier == null || !Covers(earlier, later, result))
                     {
                         continue;
                     }
@@ -260,10 +310,13 @@ namespace ZF.Puzzle.EditorTools
             }
         }
 
-        /// <summary>earlier 是否"覆盖"了 later：earlier 能匹配到 later 能匹配的所有点击。</summary>
-        private static bool Covers(InteractionRule earlier, InteractionRule later)
+        /// <summary>
+        /// earlier 是否"覆盖"了 later：earlier 能匹配到 later 能匹配的所有点击。
+        /// 目标上要理解通配：earlier 留空 = 谁都吃；earlier 是 `@类别` = 吃这个类别里的具体 id。
+        /// </summary>
+        private static bool Covers(InteractionRule earlier, InteractionRule later, PuzzleScanResult result)
         {
-            if (!string.IsNullOrEmpty(earlier.targetId) && earlier.targetId != later.targetId)
+            if (!TargetCovers(earlier.targetId, later.targetId, result))
             {
                 return false;
             }
@@ -279,6 +332,32 @@ namespace ZF.Puzzle.EditorTools
             }
 
             return true;
+        }
+
+        /// <summary>earlierTarget 的匹配范围是不是把 laterTarget 整个包住了。</summary>
+        private static bool TargetCovers(string earlierTarget, string laterTarget, PuzzleScanResult result)
+        {
+            if (string.IsNullOrEmpty(earlierTarget))
+            {
+                return true;   // 任意目标，什么都吃
+            }
+
+            if (PuzzleOps.SameState(earlierTarget, laterTarget))
+            {
+                return true;
+            }
+
+            // earlier = @类别，later = 这个类别里的某个具体 id → 包住了
+            if (PuzzleRef.IsCategory(earlierTarget) &&
+                !string.IsNullOrEmpty(laterTarget) &&
+                !PuzzleRef.IsCategory(laterTarget) &&
+                result != null &&
+                result.CategoryOf.TryGetValue(laterTarget, out string category))
+            {
+                return PuzzleOps.SameState(PuzzleRef.CategoryName(earlierTarget), category);
+            }
+
+            return false;
         }
 
         private static bool SameConditions(InteractionRule a, InteractionRule b)
@@ -326,7 +405,7 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case ObjectStateCondition state:
-                    AddInteractionRef(references, state.interactableId, ruleIndex, "条件的物体");
+                    AddTargetRef(references, state.interactableId, ruleIndex, "条件的物体");
                     return;
 
                 case HasItemCondition item:
@@ -344,27 +423,11 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case CharacterInEraCondition character:
-                    references.Add(new Reference
-                    {
-                        Value = character.characterId,
-                        MustBeInteraction = true,
-                        RuleIndex = ruleIndex,
-                        Where = "条件的人物",
-                    });
+                    AddTargetRef(references, character.characterId, ruleIndex, "条件的人物");
                     return;
 
                 case SelectedCharacterCondition character:
-                    if (!string.IsNullOrEmpty(character.characterId))
-                    {
-                        references.Add(new Reference
-                        {
-                            Value = character.characterId,
-                            MustBeInteraction = true,
-                            RuleIndex = ruleIndex,
-                            Where = "条件的人物",
-                        });
-                    }
-
+                    AddTargetRef(references, character.characterId, ruleIndex, "条件的人物");
                     return;
 
                 case AndCondition and:
@@ -406,7 +469,7 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case SetObjectStateEffect state:
-                    AddInteractionRef(references, state.interactableId, ruleIndex, "效果的物体");
+                    AddTargetRef(references, state.interactableId, ruleIndex, "效果的物体");
                     result.ObjectStates.Add(state.state);
                     return;
 
@@ -429,43 +492,43 @@ namespace ZF.Puzzle.EditorTools
                     return;
 
                 case MoveCharacterEffect move:
-                    references.Add(new Reference
-                    {
-                        Value = move.characterId,
-                        MustBeInteraction = true,
-                        RuleIndex = ruleIndex,
-                        Where = "效果搬的人物",
-                    });
+                    AddTargetRef(references, move.characterId, ruleIndex, "效果搬的人物");
+                    return;
+
+                case MoveCharacterStepEffect step:
+                    AddTargetRef(references, step.characterId, ruleIndex, "效果搬的人物");
+                    return;
+
+                case PlayCharacterAnimationEffect animation:
+                    AddTargetRef(references, animation.characterId, ruleIndex, "效果播动画的人物");
                     return;
 
                 case SelectCharacterEffect select:
-                    if (!string.IsNullOrEmpty(select.characterId))
-                    {
-                        references.Add(new Reference
-                        {
-                            Value = select.characterId,
-                            MustBeInteraction = true,
-                            RuleIndex = ruleIndex,
-                            Where = "效果点名的人物",
-                        });
-                    }
-
+                    AddTargetRef(references, select.characterId, ruleIndex, "效果点名的人物");
                     return;
             }
         }
 
-        private static void AddInteractionRef(List<Reference> references, string value, int ruleIndex, string where)
+        /// <summary>
+        /// 登记一个「目标类」引用。`@self` 不用校验（它就是被点的那个），
+        /// `@类别` 校验类别存不存在，具体 id 校验场景里有没有。
+        /// </summary>
+        private static void AddTargetRef(List<Reference> references, string value, int ruleIndex, string where)
         {
-            if (!string.IsNullOrEmpty(value))
+            if (string.IsNullOrEmpty(value))
             {
-                references.Add(new Reference
-                {
-                    Value = value,
-                    MustBeInteraction = true,
-                    RuleIndex = ruleIndex,
-                    Where = where,
-                });
+                return;
             }
+
+            references.Add(new Reference
+            {
+                Value = value,
+                Kind = PuzzleRef.IsSelf(value)
+                    ? RefKind.Self
+                    : (PuzzleRef.IsCategory(value) ? RefKind.Category : RefKind.Interaction),
+                RuleIndex = ruleIndex,
+                Where = where,
+            });
         }
 
         private static void AddItemRef(List<Reference> references, string value, int ruleIndex, string where)
@@ -475,7 +538,7 @@ namespace ZF.Puzzle.EditorTools
                 references.Add(new Reference
                 {
                     Value = value,
-                    MustBeInteraction = false,
+                    Kind = RefKind.Item,
                     RuleIndex = ruleIndex,
                     Where = where,
                 });
@@ -611,15 +674,39 @@ namespace ZF.Puzzle.EditorTools
             for (int i = 0; i < references.Count; i++)
             {
                 Reference reference = references[i];
-                bool known = reference.MustBeInteraction
-                    ? result.InteractionIds.Contains(reference.Value)
-                    : result.GivenItems.Contains(reference.Value);
 
-                if (!known)
+                switch (reference.Kind)
                 {
-                    result.Add(reference.RuleIndex, true, reference.MustBeInteraction
-                        ? $"{reference.Where}「{reference.Value}」在场景里找不到（打错字？还是那个物体没挂 Interactable/CharacterView？）"
-                        : $"{reference.Where}「{reference.Value}」没有任何地方能拿到（没有任何 GiveItemEffect 给过它）。");
+                    case RefKind.Self:
+                        continue;   // @self = 被点的那个目标，没什么可校验的
+
+                    case RefKind.Category:
+                        if (!result.Categories.Contains(PuzzleRef.CategoryName(reference.Value)))
+                        {
+                            result.Add(reference.RuleIndex, true,
+                                $"{reference.Where}用了类别「{reference.Value}」，但场景里没有任何东西属于这个类别" +
+                                "（物体的「类别」字段填了吗？人物固定属于 @character）。");
+                        }
+
+                        continue;
+
+                    case RefKind.Item:
+                        if (!result.GivenItems.Contains(reference.Value))
+                        {
+                            result.Add(reference.RuleIndex, true,
+                                $"{reference.Where}「{reference.Value}」没有任何地方能拿到（没有任何 GiveItemEffect 给过它）。");
+                        }
+
+                        continue;
+
+                    default:
+                        if (!result.InteractionIds.Contains(reference.Value))
+                        {
+                            result.Add(reference.RuleIndex, true,
+                                $"{reference.Where}「{reference.Value}」在场景里找不到（打错字？还是那个物体没挂 Interactable/CharacterView？）");
+                        }
+
+                        continue;
                 }
             }
         }

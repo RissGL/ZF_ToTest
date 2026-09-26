@@ -25,6 +25,29 @@ namespace ZF.Puzzle.EditorTools
             CharacterOps.Bind(Characters);
         }
 
+        /// <summary>
+        /// 把场景扫出来的东西灌进假状态：被点的目标属于哪一类、摆在哪个时代、叫什么名字。
+        /// 规则里的 `@类别` 和「它所在的时代」全靠这份登记，不然试跑会说"没命中"。
+        /// </summary>
+        public void BindScene(PuzzleScanResult scan)
+        {
+            if (scan == null)
+            {
+                return;
+            }
+
+            foreach (string id in scan.InteractionIds)
+            {
+                scan.CategoryOf.TryGetValue(id, out string category);
+                scan.EraOf.TryGetValue(id, out EraId era);
+                scan.DisplayNameOf.TryGetValue(id, out string name);
+                scan.SpeechOf.TryGetValue(id, out string speech);
+
+                Puzzle.RegisterTarget(id, era, category, string.IsNullOrEmpty(name) ? id : name);
+                Puzzle.SetTargetSpeech(id, speech ?? "");
+            }
+        }
+
         /// <summary>把编辑器面板上摆的值灌进假状态。</summary>
         public void Apply(IEnumerable<KeyValuePair<string, float>> flags,
             IEnumerable<string> items, string selectedItem,
@@ -78,6 +101,8 @@ namespace ZF.Puzzle.EditorTools
             PuzzleContext context = new PuzzleContext
             {
                 TargetId = targetId ?? "",
+                TargetCategory = Characters.IsKnown(targetId) ? PuzzleCategories.Character : Puzzle.GetTargetCategory(targetId),
+                TargetEra = Characters.IsKnown(targetId) ? Characters.GetEra(targetId) : Puzzle.GetTargetEra(targetId),
                 Verb = verb,
                 UsedItemId = itemId ?? "",
                 State = Puzzle,
@@ -102,7 +127,7 @@ namespace ZF.Puzzle.EditorTools
                     continue;
                 }
 
-                if (!PuzzleRuleMatcher.MatchesTarget(rule, context.TargetId, verb, itemId))
+                if (!PuzzleRuleMatcher.MatchesTarget(rule, context.TargetId, context.TargetCategory, verb, itemId))
                 {
                     continue;   // 目标和动作都不对，不啰嗦
                 }
@@ -178,6 +203,15 @@ namespace ZF.Puzzle.EditorTools
             private readonly HashSet<string> m_Solved = new HashSet<string>();
             private readonly HashSet<string> m_Steps = new HashSet<string>();
             private readonly Dictionary<string, string> m_DefaultFeedback = new Dictionary<string, string>();
+            private readonly Dictionary<string, string> m_Speeches = new Dictionary<string, string>();
+            private readonly Dictionary<string, TargetInfo> m_Targets = new Dictionary<string, TargetInfo>();
+
+            private class TargetInfo
+            {
+                public EraId Era;
+                public string Category;
+                public string DisplayName;
+            }
 
             public IReadOnlyBindableProperty<int> Revision => m_Revision;
             public IReadOnlyBindableProperty<string> SelectedItem => m_SelectedItem;
@@ -271,6 +305,57 @@ namespace ZF.Puzzle.EditorTools
                 if (!string.IsNullOrEmpty(interactionId))
                 {
                     m_DefaultFeedback[interactionId] = text ?? "";
+                }
+            }
+
+            public void RegisterTarget(string interactionId, EraId era, string category, string displayName)
+            {
+                if (string.IsNullOrEmpty(interactionId))
+                {
+                    return;
+                }
+
+                m_Targets[interactionId] = new TargetInfo
+                {
+                    Era = era,
+                    Category = string.IsNullOrEmpty(category) ? PuzzleCategories.Prop : category,
+                    DisplayName = displayName ?? "",
+                };
+            }
+
+            public bool IsKnownTarget(string interactionId) =>
+                !string.IsNullOrEmpty(interactionId) && m_Targets.ContainsKey(interactionId);
+
+            public string GetTargetCategory(string interactionId) =>
+                !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                    ? info.Category
+                    : "";
+
+            public EraId GetTargetEra(string interactionId) =>
+                !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                    ? info.Era
+                    : EraId.Stone;
+
+            public string GetTargetDisplayName(string interactionId)
+            {
+                if (!string.IsNullOrEmpty(interactionId) &&
+                    m_Targets.TryGetValue(interactionId, out TargetInfo info) &&
+                    !string.IsNullOrEmpty(info.DisplayName))
+                {
+                    return info.DisplayName;
+                }
+
+                return interactionId ?? "";
+            }
+
+            public string GetTargetSpeech(string interactionId) =>
+                !string.IsNullOrEmpty(interactionId) && m_Speeches.TryGetValue(interactionId, out string text) ? text : "";
+
+            public void SetTargetSpeech(string interactionId, string text)
+            {
+                if (!string.IsNullOrEmpty(interactionId))
+                {
+                    m_Speeches[interactionId] = text ?? "";
                 }
             }
 

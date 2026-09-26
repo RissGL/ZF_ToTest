@@ -47,8 +47,13 @@ namespace ZF.Puzzle
 
         public override string InteractionId => characterId;
         public string CharacterId => characterId;
-        public string DisplayName => string.IsNullOrEmpty(displayName) ? characterId : displayName;
+        public override string DisplayName => string.IsNullOrEmpty(displayName) ? characterId : displayName;
         public EraId HomeEra => homeEra;
+
+        /// <summary>人物这个类别是框架级的：规则写 `@character` 就管所有人物，不用一个个列。</summary>
+        protected override string DefaultCategory => PuzzleCategories.Character;
+
+        protected override EraId SceneEra => homeEra;
 
         /// <summary>他现在在哪个时代（问模型）。</summary>
         public EraId CurrentEra => m_Characters != null ? m_Characters.GetEra(characterId) : homeEra;

@@ -31,6 +31,9 @@ namespace ZF.Puzzle.EditorTools
         /// <summary>时间裂隙的物体 id。规则表里按 id 引用它。</summary>
         private static string RiftId(EraId era) => "rift_" + era.ToString().ToLowerInvariant();
 
+        /// <summary>裂隙这一类的名字。规则表里写 `@rift` 就管住四个裂隙。</summary>
+        private const string RiftCategory = "rift";
+
         // 层级：内容 0 / 地景 5 / 时代序号点 7 / 边框 10 / 锁-对勾 20（EraWindowSceneBuilder 定的）
         private const int HaloOrder = PuzzleSortingOrder.Halo;
 
@@ -127,18 +130,21 @@ namespace ZF.Puzzle.EditorTools
             ClearDemoObjects();
 
             // 规则表：老版本的表里没有人物/裂隙那些规则（或没有"点名"），场景搭好了也点不动 —— 检测到就直接重建。
+            // 还有两种"写法变了"的旧表也要认出来：人物规则**按人**一条条写、裂隙规则**按时代**一条条写。
             // （平时表是新的就不动它，免得把你在 Inspector 里改过的规则冲掉）
             PuzzleTableSO existing = AssetDatabase.LoadAssetAtPath<PuzzleTableSO>(TablePath);
             bool stale = existing != null &&
-                         (!HasRuleFor(existing, RiftId(EraId.Stone)) ||
+                         (!HasRuleFor(existing, RiftCategoryRef) ||
+                          !HasRuleFor(existing, CharacterCategoryRef) ||
                           !HasEffect<PlayCharacterAnimationEffect>(existing) ||
-                          !HasStepPuzzle(existing));
+                          !HasStepPuzzle(existing) ||
+                          HasRedundantFallbackRule(existing));
 
             PuzzleTableSO table = EnsureTable(stale);
             if (stale)
             {
-                Debug.Log("[谜题] 演示规则表是旧版本的（没有人物/时间裂隙/点名的规则），已按新演示内容重建 —— " +
-                          "你在 Inspector 里改过的演示规则被覆盖了。");
+                Debug.Log("[谜题] 演示规则表是旧版本的（还是「每个人物两条规则、每个时代三条规则」的老写法，" +
+                          "或者还留着纯兜底的占位规则），已按新演示内容重建 —— 你在 Inspector 里改过的演示规则被覆盖了。");
             }
 
             // 物件（windows[i] 的 i 就是 (int)EraId，和 EraWorldController 排序后的窗口序号是同一个约定）
@@ -355,6 +361,11 @@ namespace ZF.Puzzle.EditorTools
             SetString(so, "characterId", id);
             SetString(so, "displayName", CharacterNames[index]);
             SetInt(so, "homeEra", (int)CharacterHomes[index]);
+
+            // 台词挂在人物自己身上：规则表里那条「任意人物：点名」是通配的，
+            // 说不了每个人不同的话 —— 用 {目标说} 引用这句就行。
+            SetString(so, "speech", CharacterLines[index]);
+
             SetRef(so, "hitArea", hitArea);
             SetRef(so, "hoverFrame", halo);
             WriteStateGroups(so, groups);
@@ -407,7 +418,11 @@ namespace ZF.Puzzle.EditorTools
             List<SpriteRenderer> all = new List<SpriteRenderer>(closed);
             all.AddRange(open);
 
-            Finish(target, id, era, "时间裂隙", "closed", groups, rules, window, all, white);
+            // 类别 = rift：规则表里一条「@rift」就管四个裂隙（不用每个时代写一条规则）。
+            // 默认提示 = 裂隙还没开时说的一句话（没有规则命中时就说它）。
+            Finish(target, id, era, "时间裂隙", "closed", groups, rules, window, all, white,
+                defaultFeedback: "裂隙还闭着。得先让这个年头的火点起来。",
+                category: RiftCategory);
         }
 
         // ===================== 规则表 =====================
@@ -443,6 +458,31 @@ namespace ZF.Puzzle.EditorTools
             for (int i = 0; i < table.puzzles.Count; i++)
             {
                 if (table.puzzles[i] != null && table.puzzles[i].mode == PuzzleMode.Steps)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 表里还留着「纯兜底的空手点规则」吗 —— 老演示版本给每个物件都单拉了一条
+        /// 「已经抠过了 / 空手点柴堆 / 还是冷的 / 裂隙还闭着」这种只有一句话的规则。
+        /// 新演示一律把它们写进规则的 elseFeedback 或物件的默认提示，不再占一行。
+        /// 判断口径和编辑器校验（PuzzleEditorScan）是同一个，免得两边说法不一样。
+        /// </summary>
+        private static bool HasRedundantFallbackRule(PuzzleTableSO table)
+        {
+            if (table == null || table.interactionRules == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < table.interactionRules.Count; i++)
+            {
+                if (PuzzleEditorScan.IsOnlyFeedback(table.interactionRules[i]) &&
+                    PuzzleEditorScan.FindCoveringRuleAbove(table.interactionRules, i) >= 0)
                 {
                     return true;
                 }
@@ -519,8 +559,15 @@ namespace ZF.Puzzle.EditorTools
             const string Hearth = "hearth";
             const string Flint = "flint";
 
+            // ★ 只有 8 条规则，而且**不随人物数 / 时代数增长**。
+            //
+            // 关键是目标可以写类别（`@character` / `@rift`）+ 效果能引用"被点的那个自己"：
+            //   · 点人物 = 选中他（一条管五个人物）  ← 以前是 5×2 = 10 条
+            //   · 点裂隙 = 把点名的人送去"这个裂隙所在时代的下一个"（三条管四个裂隙） ← 以前是 4×3 = 12 条
+            // 再加 3 条真有设计内容的谜题规则。
             List<InteractionRule> rules = new List<InteractionRule>
             {
+                // ---- 真有内容的谜题规则：目标都是具体 id ----
                 new InteractionRule
                 {
                     note = "岩壁：抠出燧石",
@@ -560,90 +607,87 @@ namespace ZF.Puzzle.EditorTools
                     // 「还是冷的」不单拉规则，兜底话写在这儿
                     elseFeedback = "壁炉是冷的，一根柴都没有。",
                 },
-            };
 
-            // ---- 人物：点他 = **点名**（再点一次取消），顺便说一句台词 ----
-            // 点名之后**再去点时间裂隙**才会走 —— 见下面裂隙的第 1 条规则。
-            for (int i = 0; i < CharacterIds.Length; i++)
-            {
-                rules.Add(new InteractionRule
+                // ---- 人物：一条管所有人物。点他 = 点名（再点一次取消）----
+                // 顺序不能反：先判"点名的就是他"，否则第一条会把第二条永远挡住。
+                new InteractionRule
                 {
-                    note = $"人物 {CharacterNames[i]}：已经点着他了 → 再点一次取消（条件在前）",
-                    targetId = CharacterIds[i],
+                    note = "人物：已经点着他了 → 再点一次取消",
+                    targetId = CharacterCategoryRef,
                     verb = Verb.Interact,
-                    conditions = Conditions(new SelectedCharacterCondition { characterId = CharacterIds[i] }),
+                    conditions = Conditions(new SelectedCharacterCondition { characterId = PuzzleRef.Self }),
                     effects = Effects(
                         new SelectCharacterEffect(),
-                        new FeedbackEffect { message = $"取消点名{CharacterNames[i]}。" }),
-                });
-
-                rules.Add(new InteractionRule
+                        new FeedbackEffect { message = "取消点名{目标名}。" }),
+                },
+                new InteractionRule
                 {
-                    note = $"人物 {CharacterNames[i]}：点名（再去点裂隙他才走）",
-                    targetId = CharacterIds[i],
+                    note = "人物：点名（再去点时间裂隙他才走）",
+                    targetId = CharacterCategoryRef,
                     verb = Verb.Interact,
                     conditions = Conditions(),
                     effects = Effects(
-                        new SelectCharacterEffect { characterId = CharacterIds[i] },
-                        new FeedbackEffect { message = $"点名{CharacterNames[i]}，去点时间裂隙送他走。{CharacterLines[i]}" }),
-                });
-            }
+                        new SelectCharacterEffect { characterId = PuzzleRef.Self },
+                        new FeedbackEffect { message = "点名{目标名}，去点时间裂隙送他走。\n{目标说}" }),
+                },
+            };
 
-            // ---- 时间裂隙：每个时代一个。**点裂隙 = 把点名的那个人送走**（没点名就整个时代一起走）----
-            for (int i = 0; i < EraCatalog.All.Length; i++)
+            // ---- 时间裂隙：三条管四个裂隙。**送到哪 = 这个裂隙所在时代的下一个**，所以不用按时代写 ----
+            // ① 点名了人、而且那个人就在这个裂隙的时代 → 只送他一个人，并且串上动画
+            rules.Add(new InteractionRule
             {
-                EraId era = EraCatalog.All[i].id;
-                EraId next = EraCatalog.Next(era);
-                string eraTitle = EraCatalog.Get(era).title;
-                string nextTitle = EraCatalog.Get(next).title;
+                note = "裂隙：只送点名的那个人（带离场/到场动画）",
+                targetId = RiftCategoryRef,
+                verb = Verb.Interact,
+                conditions = Conditions(
+                    FlagOn("fire_lit"),
+                    new SelectedCharacterInEraCondition { eraRef = EraRef.TargetEra }),
+                effects = Effects(
+                    new PlayCharacterAnimationEffect { characterId = "", clip = "leave" },
+                    new MoveSelectedCharacterEffect { eraRef = EraRef.TargetEraNext, delayBefore = 0.55f },
+                    new PlayCharacterAnimationEffect { characterId = "", clip = "arrive" },
+                    new FeedbackEffect { message = "{人物名}一个人跨进了{下一个}。" }),
+            });
 
-                // ① 点名了人、而且那个人就在这个时代 → **只送他一个人**，并且串上动画：
-                //    播离场动画 → 等 0.55 秒（delayBefore）→ 真搬 → 播到场动画
-                rules.Add(new InteractionRule
-                {
-                    note = $"时间裂隙：只送点名的那个人 {eraTitle} → {nextTitle}（带离场/到场动画）",
-                    targetId = RiftId(era),
-                    verb = Verb.Interact,
-                    conditions = Conditions(FlagOn("fire_lit"), new SelectedCharacterInEraCondition { era = era }),
-                    effects = Effects(
-                        new PlayCharacterAnimationEffect { characterId = "", clip = "leave" },
-                        new MoveSelectedCharacterEffect { targetEra = next, delayBefore = 0.55f },
-                        new PlayCharacterAnimationEffect { characterId = "", clip = "arrive" },
-                        new FeedbackEffect { message = $"你点名的那个人一个人跨进了{nextTitle}。" }),
-                    // 「裂隙还闭着」也不单拉一条规则 —— 兜底话写在这儿
-                    elseFeedback = "裂隙还闭着。得先让这个年头的火点起来。",
-                });
-
-                // ② 没点名（或点名的人不在这个时代），这个时代有人 → 整个时代一起走
-                rules.Add(new InteractionRule
-                {
-                    note = $"时间裂隙：整个 {eraTitle} 一起走 → {nextTitle}",
-                    targetId = RiftId(era),
-                    verb = Verb.Interact,
-                    conditions = Conditions(FlagOn("fire_lit"), new CharacterCountInEraCondition
+            // ② 没点名（或点名的人不在这个时代）而这里有人 → 整个时代一起走
+            rules.Add(new InteractionRule
+            {
+                note = "裂隙：整个时代一起走",
+                targetId = RiftCategoryRef,
+                verb = Verb.Interact,
+                conditions = Conditions(
+                    FlagOn("fire_lit"),
+                    new CharacterCountInEraCondition
                     {
-                        era = era,
+                        eraRef = EraRef.TargetEra,
                         op = FlagOp.GreaterOrEqual,
                         count = 1f,
                     }),
-                    effects = Effects(
-                        new MoveEraCharactersEffect { fromEra = era, targetEra = next },
-                        new FeedbackEffect { message = $"{eraTitle}的人一起跨进了{nextTitle}的窗口。" }),
-                });
+                effects = Effects(
+                    new MoveEraCharactersEffect { fromEraRef = EraRef.TargetEra, eraRef = EraRef.TargetEraNext },
+                    new FeedbackEffect { message = "{这里}的人一起跨进了{下一个}。" }),
+            });
 
-                // ② 裂隙开着但这个时代没人
-                rules.Add(new InteractionRule
-                {
-                    note = "时间裂隙：这个时代没人",
-                    targetId = RiftId(era),
-                    verb = Verb.Interact,
-                    conditions = Conditions(FlagOn("fire_lit")),
-                    effects = Effects(new FeedbackEffect { message = $"{eraTitle}里已经没有人了。" }),
-                });
-            }
+            // ③ 裂隙开着但这个时代已经没人了。
+            //    这句**不能**并到上面两条的 elseFeedback 里 —— 兜底话取的是"第一条匹配但条件不满足"的那条，
+            //    那样"火还没点着"和"这个时代没人"会共用一句话。所以它单独一条，条件就是"火点着了"。
+            rules.Add(new InteractionRule
+            {
+                note = "裂隙：开着，但这个时代没人",
+                targetId = RiftCategoryRef,
+                verb = Verb.Interact,
+                conditions = Conditions(FlagOn("fire_lit")),
+                effects = Effects(new FeedbackEffect { message = "{这里}里已经没有人了。" }),
+            });
 
             return rules;
         }
+
+        /// <summary>「裂隙」这一类。规则写类别 = 一条管四个裂隙；类别名写在裂隙物体上（见 BuildRift）。</summary>
+        private const string RiftCategoryRef = "@" + RiftCategory;
+
+        /// <summary>人物类别是框架级的（CharacterView 自动属于它）。</summary>
+        private const string CharacterCategoryRef = "@" + PuzzleCategories.Character;
 
         private static List<PuzzleDefinition> BuildPuzzles()
         {
@@ -745,7 +789,7 @@ namespace ZF.Puzzle.EditorTools
 
         private static void Finish(Interactable target, string id, EraId era, string displayName, string defaultState,
             List<StateGroup> groups, List<VisualStateRule> rules, Transform window, List<SpriteRenderer> shapes, Sprite white,
-            string defaultFeedback = "")
+            string defaultFeedback = "", string category = "")
         {
             // 高亮框挂在窗口上而不是物体上：这样它不会算进物体的点击区域
             SpriteRenderer halo = CreateHalo(window, shapes, white);
@@ -758,6 +802,9 @@ namespace ZF.Puzzle.EditorTools
 
             // 「空手点它、又没有任何规则命中时说什么」—— 挂在物体上，不占规则行
             SetString(so, "defaultFeedback", defaultFeedback);
+
+            // 类别：规则表里写 @类别 就能一次管一批（@rift 一条管四个裂隙）
+            SetString(so, "category", category);
 
             SetRef(so, "hitArea", target.GetComponent<BoxCollider2D>());
             SetRef(so, "hoverFrame", halo);

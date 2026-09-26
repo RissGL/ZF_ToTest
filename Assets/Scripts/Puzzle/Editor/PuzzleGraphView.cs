@@ -10,8 +10,8 @@ namespace ZF.Puzzle.EditorTools
     /// 谜题关系图。
     ///
     /// 关键设计：**规则本身就是一个节点**，不是边。因为规则表是"顺序查表、第一条命中的生效"，
-    /// 顺序用**同一列的上下位置**表达最直观（越上面优先级越高）；边只表示"读了什么 / 写了什么"。
-    /// 如果把规则做成边，"多条规则 + 谁先命中"就没地方表达了。
+    /// 把规则做成边的话，"多条规则 + 谁先命中"就没地方表达了；边只表示"读了什么 / 写了什么"。
+    /// 优先级 = 规则在表里的下标，**只**由右侧表单的 ▲▼ 改 —— 图上的位置纯粹是摆着好看，不参与排序。
     ///
     /// 列：物体/人物 → 规则 → flag/道具 → 谜题 → 时代
     /// </summary>
@@ -139,13 +139,15 @@ namespace ZF.Puzzle.EditorTools
 
         public static void Build(PuzzleGraphView graph, PuzzleTableSO table, PuzzleScanResult scan,
             Dictionary<string, Rect> layout, bool showObjects, bool showRules, bool showFlags, bool showItems,
-            bool showPuzzles, bool showEras)
+            bool showPuzzles, bool showEras, bool showReadEdges, float availableHeight)
         {
-            // 记住用户手动摆过的位置（一次会话内）
+            // 记住现在每个节点在哪 —— 重建时**原位放回去，一个都不动**（包括规则节点）。
+            // 位置只在新节点第一次出现时算一次，之后你拖到哪就留在哪；
+            // 想重排只有一条路：工具栏那个「重新布局」按钮（手动）。
             Dictionary<string, Rect> previous = new Dictionary<string, Rect>();
             foreach (GraphElement element in graph.graphElements.ToList())
             {
-                if (element is PuzzleGraphNode kept && kept.RuleIndex < 0 && !string.IsNullOrEmpty(kept.Key))
+                if (element is PuzzleGraphNode kept && !string.IsNullOrEmpty(kept.Key))
                 {
                     previous[kept.Key] = kept.GetPosition();
                 }
@@ -263,11 +265,16 @@ namespace ZF.Puzzle.EditorTools
                     }
 
                     string target = string.IsNullOrEmpty(rule.targetId) ? "*任意物体*" : rule.targetId;
-                    string verb = VerbText(rule.verb) + (string.IsNullOrEmpty(rule.itemId) ? "" : " " + rule.itemId);
 
-                    // 条件里的 flag 也写进标题：不然光看"这条规则连着 fire_lit"不知道是为什么
+                    // 标题：有备注就用备注（"点名阿岩" 比 "空手点" 有用一万倍），没有才退回「目标 · 动作」。
+                    // 动作只在「用道具」时才写出来 —— 空手点是默认手势，每条都写一遍等于什么都没说。
+                    string gesture = GestureText(rule);
+                    string head = string.IsNullOrEmpty(rule.note)
+                        ? $"{target} · {VerbText(rule.verb)}"
+                        : rule.note;
                     string needs = ConditionFlags(rule);
-                    string title = $"#{i + 1}  {target} · {verb}" + (string.IsNullOrEmpty(needs) ? "" : $"   ← 要 {needs}");
+                    string title = $"#{i + 1}  {head}" + (string.IsNullOrEmpty(gesture) ? "" : $"   [{gesture}]") +
+                                   (string.IsNullOrEmpty(needs) ? "" : $"   ← 要 {needs}");
 
                     graph.AddNode(new PuzzleGraphNode("rule:" + i, i, title, RuleBody(rule), RuleColor));
                 }
@@ -295,20 +302,47 @@ namespace ZF.Puzzle.EditorTools
                 {
                     graph.AddEdge(target, ruleNode);
                 }
+                else if (PuzzleRef.IsCategory(rule.targetId))
+                {
+                    // 目标是类别（`@rift`）：把这一类里的每个物体都连过来，
+                    // 不然"这条规则到底管谁"在图上完全看不出来
+                    string category = PuzzleRef.CategoryName(rule.targetId);
 
-                // 道具门槛：道具 → 规则
-                if (!string.IsNullOrEmpty(rule.itemId))
+                    foreach (KeyValuePair<string, PuzzleGraphNode> pair in graph.Nodes)
+                    {
+                        if (!pair.Key.StartsWith("obj:", System.StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        string id = pair.Key.Substring(4);
+                        if (scan != null &&
+                            scan.CategoryOf.TryGetValue(id, out string owner) &&
+                            PuzzleOps.SameState(owner, category))
+                        {
+                            graph.AddEdge(pair.Value, ruleNode);
+                        }
+                    }
+                }
+
+                // 道具门槛：道具 → 规则（也属于"读"，所以跟着开关走）
+                if (showReadEdges && !string.IsNullOrEmpty(rule.itemId))
                 {
                     graph.AddEdge(graph.Get("item:" + rule.itemId), ruleNode);
                 }
 
-                // 读：状态 → 规则
-                for (int c = 0; c < rule.conditions.Count; c++)
+                // 读：状态 → 规则。
+                // 默认**不画** —— 「读」是静态依赖，而且数量最多（一个 flag 会被 N 条规则当门槛），
+                // 画出来就是一团线。改成「选中那个 flag 节点 → 右侧列出读它的规则」，比线清楚。
+                if (showReadEdges)
                 {
-                    LinkReads(rule.conditions[c], graph, ruleNode);
+                    for (int c = 0; c < rule.conditions.Count; c++)
+                    {
+                        LinkReads(rule.conditions[c], graph, ruleNode);
+                    }
                 }
 
-                // 写：规则 → 状态
+                // 写：规则 → 状态（这个永远画：它才是"这条规则干了什么"）
                 for (int e = 0; e < rule.effects.Count; e++)
                 {
                     LinkWrites(rule.effects[e], graph, ruleNode);
@@ -356,11 +390,15 @@ namespace ZF.Puzzle.EditorTools
                 }
             }
 
-            Layout(graph, layout, previous, showObjects, showItems);
+            Layout(graph, layout, previous, showObjects, showItems, availableHeight);
         }
 
         private static string RuleBody(InteractionRule rule)
         {
+            // 第一行写清「点谁、怎么点」—— 标题让给备注了，目标得在这儿露个面
+            string who = "点：" + (string.IsNullOrEmpty(rule.targetId) ? "*任意物体*" : rule.targetId) +
+                         (string.IsNullOrEmpty(rule.itemId) ? "" : $"   用 {rule.itemId}");
+
             string conditions = rule.conditions == null || rule.conditions.Count == 0
                 ? "条件：无条件"
                 : "条件：" + Join(rule.conditions);
@@ -370,7 +408,18 @@ namespace ZF.Puzzle.EditorTools
                 : "效果：" + Join(rule.effects);
 
             string extra = string.IsNullOrEmpty(rule.elseFeedback) ? "" : $"\n不满足时：「{rule.elseFeedback}」";
-            return conditions + "\n" + effects + extra;
+            return who + "\n" + conditions + "\n" + effects + extra;
+        }
+
+        /// <summary>标题上那一小截动作说明。空手点是默认手势 → 返回空串，不占地方。</summary>
+        private static string GestureText(InteractionRule rule)
+        {
+            switch (rule.verb)
+            {
+                case Verb.UseItem: return string.IsNullOrEmpty(rule.itemId) ? "用道具点" : $"用 {rule.itemId} 点";
+                case Verb.Any: return "任意动作";
+                default: return "";
+            }
         }
 
         private static string Join(List<PuzzleCondition> conditions)
@@ -490,11 +539,24 @@ namespace ZF.Puzzle.EditorTools
 
         // ===================== 布局 =====================
 
-        /// <summary>按类型分列。规则那一列按表里的顺序从上往下排 = 优先级从上往下。</summary>
+        private const float NodeWidth = 250f;
+        private const float ColumnPitch = 286f;
+        private const float RowPitch = 122f;
+        private const float BandGap = 26f;
+
+        /// <summary>
+        /// 只给**第一次出现的新节点**算位置（分「带」：一个带 = 一种类型，带内按窗口高度折行）。
+        /// 已经有位置的节点**原地不动** —— 重建（重新扫描 / 切开关 / 改字段）不会把你的摆位弄乱。
+        /// 唯一的例外是工具栏那个「重新布局」按钮（它会把位置缓存清掉，重新算一遍）。
+        /// </summary>
         private static void Layout(PuzzleGraphView graph, Dictionary<string, Rect> layout,
-            Dictionary<string, Rect> previous, bool showObjects, bool showItems)
+            Dictionary<string, Rect> previous, bool showObjects, bool showItems, float availableHeight)
         {
-            Dictionary<int, int> cursor = new Dictionary<int, int>();
+            // 一列放几个：跟着窗口高度走，太矮/太高都夹一下
+            int rowsPerColumn = Mathf.Clamp(Mathf.FloorToInt((availableHeight - 20f) / RowPitch), 3, 12);
+
+            // 先按「带」分组
+            SortedDictionary<int, List<PuzzleGraphNode>> bands = new SortedDictionary<int, List<PuzzleGraphNode>>();
 
             foreach (GraphElement element in graph.graphElements.ToList())
             {
@@ -503,24 +565,42 @@ namespace ZF.Puzzle.EditorTools
                     continue;
                 }
 
-                // 状态节点保留用户摆过的位置；规则节点永远按优先级重排
-                if (node.RuleIndex < 0 && previous.TryGetValue(node.Key, out Rect saved))
+                // 摆过的位置优先，原位放回去，什么都不动
+                if (previous.TryGetValue(node.Key, out Rect saved))
                 {
                     node.SetPosition(saved);
                     continue;
                 }
 
-                int column = ColumnOf(node, showObjects, showItems);
-                cursor.TryGetValue(column, out int row);
-                cursor[column] = row + 1;
-
-                Rect rect = new Rect(column * 300f, row * 132f, 260f, 90f);
-                node.SetPosition(rect);
-
-                if (node.RuleIndex < 0)
+                int band = ColumnOf(node, showObjects, showItems);
+                if (!bands.TryGetValue(band, out List<PuzzleGraphNode> list))
                 {
-                    layout[node.Key] = rect;
+                    list = new List<PuzzleGraphNode>();
+                    bands[band] = list;
                 }
+
+                list.Add(node);
+            }
+
+            int column = 0;
+
+            foreach (KeyValuePair<int, List<PuzzleGraphNode>> pair in bands)
+            {
+                List<PuzzleGraphNode> nodes = pair.Value;
+                int band = pair.Key;
+                int columns = Mathf.Max(1, Mathf.CeilToInt((float)nodes.Count / rowsPerColumn));
+
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    int c = column + i / rowsPerColumn;
+                    int r = i % rowsPerColumn;
+
+                    Rect rect = new Rect(c * ColumnPitch + band * BandGap, r * RowPitch, NodeWidth, 90f);
+                    nodes[i].SetPosition(rect);
+                    layout[nodes[i].Key] = rect;
+                }
+
+                column += columns;
             }
         }
 

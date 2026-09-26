@@ -27,7 +27,9 @@ namespace ZF.Puzzle
 
         public string Id => id;
         public EraId Era => era;
-        public string DisplayName => string.IsNullOrEmpty(displayName) ? id : displayName;
+        public override string DisplayName => string.IsNullOrEmpty(displayName) ? id : displayName;
+
+        protected override EraId SceneEra => era;
 
         public override string InteractionId => id;
     }
