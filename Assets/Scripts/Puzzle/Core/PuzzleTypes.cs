@@ -21,6 +21,16 @@ namespace ZF.Puzzle
         UseItem = 2,
     }
 
+    /// <summary>
+    /// 「往前走一个时代 / 往回退一个时代」。
+    /// 目标时代是**相对这个人现在所在的时代**算的 —— 所以一条规则就能管他从哪个时代出发。
+    /// </summary>
+    public enum EraStep
+    {
+        NextEra = 0,
+        PreviousEra = 1,
+    }
+
     /// <summary>flag 比较方式。bool 也走这套：0 = 假，其它 = 真。</summary>
     public enum FlagOp
     {

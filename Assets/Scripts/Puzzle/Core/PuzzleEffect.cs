@@ -123,8 +123,7 @@ namespace ZF.Puzzle
     [Serializable]
     public class FeedbackEffect : PuzzleEffect
     {
-        [Label("要说的话")]
-        [TextArea]
+        [Label("要说的话", 3)]
         public string message = "";
 
         public override void Execute(PuzzleContext context) => context.Feedback?.Invoke(message);
@@ -147,6 +146,29 @@ namespace ZF.Puzzle
     // ===================== 人物相关 =====================
 
     /// <summary>
+    /// 【动画接口】让某个人播一段动画（不碰状态，只发事件）。
+    ///
+    /// 典型用法是排成一条链：
+    ///   PlayCharacterAnimation("leave") → MoveSelectedCharacter(delayBefore=0.6) → PlayCharacterAnimation("arrive")
+    /// 效果基类的 `delayBefore` 负责"等动画播完"，搬家照旧由 Move* 效果做。
+    /// characterId 留空 = 当前点名的那个。
+    /// </summary>
+    [Serializable]
+    public class PlayCharacterAnimationEffect : PuzzleEffect
+    {
+        [Label("人物 id（留空 = 点名的那个人）")]
+        public string characterId = "";
+
+        [Label("动画名（自己约定，比如 leave / arrive）")]
+        public string clip = "leave";
+
+        public override void Execute(PuzzleContext context) => context.CharacterOps?.PlayAnimation(characterId, clip);
+
+        public override string Describe() =>
+            $"让[{(string.IsNullOrEmpty(characterId) ? "点名的人" : characterId)}]播「{clip}」";
+    }
+
+    /// <summary>
     /// 把一个人搬到另一个时代。
     /// 「通过一定方式移动」里的方式就是这条效果 —— 把它放进任何一条规则里（点裂隙、解开谜题、用某个道具）。
     /// </summary>
@@ -162,6 +184,36 @@ namespace ZF.Puzzle
         public override void Execute(PuzzleContext context) => context.CharacterOps?.TryMove(characterId, targetEra);
 
         public override string Describe() => $"把[{characterId}]搬到 {targetEra}";
+    }
+
+    /// <summary>
+    /// 把一个人**往前（或往回）送一个时代** —— 目标相对他现在所在的时代算，
+    /// 所以「点他，他就往前走一个时代」只需要一条规则，不用每个时代写一条。
+    /// </summary>
+    [Serializable]
+    public class MoveCharacterStepEffect : PuzzleEffect
+    {
+        [Label("人物 id")]
+        public string characterId = "";
+
+        [Label("往前 / 往回")]
+        public EraStep step = EraStep.NextEra;
+
+        public override void Execute(PuzzleContext context)
+        {
+            if (context.Characters == null || context.CharacterOps == null || string.IsNullOrEmpty(characterId))
+            {
+                return;
+            }
+
+            EraId current = context.Characters.GetEra(characterId);
+            EraId target = step == EraStep.PreviousEra ? EraCatalog.Previous(current) : EraCatalog.Next(current);
+
+            context.CharacterOps.TryMove(characterId, target);
+        }
+
+        public override string Describe() =>
+            $"把[{characterId}]送到{(step == EraStep.PreviousEra ? "上" : "下")}一个时代";
     }
 
     /// <summary>

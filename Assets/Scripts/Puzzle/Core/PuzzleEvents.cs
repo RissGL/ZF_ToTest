@@ -35,6 +35,26 @@ namespace ZF.Puzzle
         public bool IsMain;
     }
 
+    /// <summary>
+    /// 步骤式谜题：**刚刚完成了其中一步**（不是整个谜题）。
+    /// UI 想显示「2/3」、想播"做完了"的音效、想弹提示，都挂这个。
+    /// </summary>
+    public class PuzzleStepCompletedEvent : GameEvent
+    {
+        public string PuzzleId;
+        public string PuzzleTitle;
+        public string StepId;
+        public string StepTitle;
+
+        /// <summary>这一步在清单里是第几步（从 1 开始）。</summary>
+        public int StepNumber;
+        public int StepTotal;
+
+        /// <summary>必做步骤做完了几步 / 一共几步。</summary>
+        public int RequiredDone;
+        public int RequiredTotal;
+    }
+
     /// <summary>背包变了。</summary>
     public class PuzzleItemEvent : GameEvent
     {

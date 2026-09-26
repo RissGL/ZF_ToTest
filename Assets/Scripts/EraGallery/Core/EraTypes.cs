@@ -148,6 +148,20 @@ namespace ZF.EraGallery
 
             return All[0].id;
         }
+
+        /// <summary>上一个时代（到第一个绕回最后一个）。</summary>
+        public static EraId Previous(EraId id)
+        {
+            for (int i = 0; i < All.Length; i++)
+            {
+                if (All[i].id == id)
+                {
+                    return All[(i - 1 + All.Length) % All.Length].id;
+                }
+            }
+
+            return All[0].id;
+        }
     }
 
     /// <summary>窗口用到的排序层级（2D 都是同一层，靠 order 决定谁压谁）。</summary>

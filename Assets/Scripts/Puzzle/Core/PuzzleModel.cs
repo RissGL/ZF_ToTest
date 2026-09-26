@@ -43,6 +43,11 @@ namespace ZF.Puzzle
         bool IsSolved(string puzzleId);
         void MarkSolved(string puzzleId);
 
+        /// <summary>步骤式谜题：这一步做过了吗。**做过就一直算做过** —— 条件后来不成立了也不退回。</summary>
+        bool IsStepDone(string puzzleId, string stepId);
+
+        void MarkStepDone(string puzzleId, string stepId);
+
         // ---- 存档：状态全在这儿，所以就是一段 JSON ----
         string ToJson();
         void LoadJson(string json);
@@ -58,6 +63,9 @@ namespace ZF.Puzzle
         private readonly Dictionary<string, string> m_ObjectStates = new Dictionary<string, string>();
         private readonly List<string> m_Items = new List<string>();
         private readonly HashSet<string> m_Solved = new HashSet<string>();
+
+        /// <summary>步骤式谜题的进度，key = "谜题id/步骤id"。存起来，读档回来进度还在。</summary>
+        private readonly HashSet<string> m_Steps = new HashSet<string>();
 
         public IReadOnlyBindableProperty<int> Revision => m_Revision;
         public IReadOnlyBindableProperty<string> SelectedItem => m_SelectedItem;
@@ -203,6 +211,23 @@ namespace ZF.Puzzle
             BumpRevision();
         }
 
+        public bool IsStepDone(string puzzleId, string stepId) =>
+            !string.IsNullOrEmpty(puzzleId) && !string.IsNullOrEmpty(stepId) &&
+            m_Steps.Contains(puzzleId + "/" + stepId);
+
+        public void MarkStepDone(string puzzleId, string stepId)
+        {
+            if (string.IsNullOrEmpty(puzzleId) || string.IsNullOrEmpty(stepId))
+            {
+                return;
+            }
+
+            if (m_Steps.Add(puzzleId + "/" + stepId))
+            {
+                BumpRevision();
+            }
+        }
+
         // ===================== 存档 =====================
 
         public void ResetAll()
@@ -211,6 +236,7 @@ namespace ZF.Puzzle
             m_ObjectStates.Clear();
             m_Items.Clear();
             m_Solved.Clear();
+            m_Steps.Clear();
             m_SelectedItem.SetValueWithoutEvent("");
             BumpRevision();
         }
@@ -233,6 +259,7 @@ namespace ZF.Puzzle
 
             data.items.AddRange(m_Items);
             data.solved.AddRange(m_Solved);
+            data.steps.AddRange(m_Steps);
             data.selectedItem = m_SelectedItem.Value;
 
             return JsonUtility.ToJson(data, true);
@@ -269,6 +296,12 @@ namespace ZF.Puzzle
 
             m_Items.AddRange(data.items);
             m_Solved.UnionWith(data.solved);
+
+            if (data.steps != null)
+            {
+                m_Steps.UnionWith(data.steps);
+            }
+
             m_SelectedItem.SetValueWithoutEvent(data.selectedItem ?? "");
 
             BumpRevision();
@@ -283,6 +316,7 @@ namespace ZF.Puzzle
             public List<string> objectStates = new List<string>();
             public List<string> items = new List<string>();
             public List<string> solved = new List<string>();
+            public List<string> steps = new List<string>();
             public string selectedItem = "";
         }
 

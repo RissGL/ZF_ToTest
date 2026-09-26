@@ -176,6 +176,7 @@ namespace ZF.Puzzle.EditorTools
             private readonly Dictionary<string, string> m_ObjectStates = new Dictionary<string, string>();
             private readonly List<string> m_Items = new List<string>();
             private readonly HashSet<string> m_Solved = new HashSet<string>();
+            private readonly HashSet<string> m_Steps = new HashSet<string>();
 
             public IReadOnlyBindableProperty<int> Revision => m_Revision;
             public IReadOnlyBindableProperty<string> SelectedItem => m_SelectedItem;
@@ -241,6 +242,19 @@ namespace ZF.Puzzle.EditorTools
                 if (!string.IsNullOrEmpty(puzzleId) && m_Solved.Add(puzzleId)) { Bump(); }
             }
 
+            public bool IsStepDone(string puzzleId, string stepId) =>
+                !string.IsNullOrEmpty(puzzleId) && !string.IsNullOrEmpty(stepId) &&
+                m_Steps.Contains(puzzleId + "/" + stepId);
+
+            public void MarkStepDone(string puzzleId, string stepId)
+            {
+                if (!string.IsNullOrEmpty(puzzleId) && !string.IsNullOrEmpty(stepId) &&
+                    m_Steps.Add(puzzleId + "/" + stepId))
+                {
+                    Bump();
+                }
+            }
+
             public string ToJson() => "";
             public void LoadJson(string json) { }
 
@@ -250,6 +264,7 @@ namespace ZF.Puzzle.EditorTools
                 m_ObjectStates.Clear();
                 m_Items.Clear();
                 m_Solved.Clear();
+                m_Steps.Clear();
                 m_SelectedItem.SetValueWithoutEvent("");
                 Bump();
             }
@@ -365,6 +380,17 @@ namespace ZF.Puzzle.EditorTools
 
                 m_Model.SetEra(characterId, targetEra);
                 Log.Add($"[{characterId}] 从 {from} 搬到 {targetEra}");
+                return true;
+            }
+
+            public bool PlayAnimation(string characterId, string clip)
+            {
+                if (m_Model == null) { return false; }
+
+                string target = string.IsNullOrEmpty(characterId) ? m_Model.SelectedCharacter.Value : characterId;
+                if (string.IsNullOrEmpty(target)) { return false; }
+
+                Log.Add($"[{target}] 播动画「{clip}」");
                 return true;
             }
 

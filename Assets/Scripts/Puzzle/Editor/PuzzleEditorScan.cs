@@ -27,6 +27,9 @@ namespace ZF.Puzzle.EditorTools
         public readonly HashSet<string> GivenItems = new HashSet<string>();
         public readonly HashSet<string> UsedItems = new HashSet<string>();
 
+        /// <summary>表里出现过的物体状态名（给编辑器当候选：lit / cold / open…）。</summary>
+        public readonly HashSet<string> ObjectStates = new HashSet<string>();
+
         public readonly List<PuzzleIssue> Issues = new List<PuzzleIssue>();
 
         public int Errors { get; private set; }
@@ -365,6 +368,7 @@ namespace ZF.Puzzle.EditorTools
 
                 case SetObjectStateEffect state:
                     AddInteractionRef(references, state.interactableId, ruleIndex, "效果的物体");
+                    result.ObjectStates.Add(state.state);
                     return;
 
                 case GiveItemEffect item:
@@ -466,7 +470,11 @@ namespace ZF.Puzzle.EditorTools
                     result.Add(-1, true, $"谜题 id「{puzzle.id}」重复了。");
                 }
 
-                if (puzzle.conditions == null || puzzle.conditions.Count == 0)
+                if (puzzle.mode == PuzzleMode.Steps)
+                {
+                    ScanSteps(puzzle, result, references, puzzleRefs);
+                }
+                else if (puzzle.conditions == null || puzzle.conditions.Count == 0)
                 {
                     result.Add(-1, false,
                         $"谜题「{Title(puzzle)}」没写完成条件 —— 它不会自己完成，只能被 SolvePuzzleEffect 显式完成。");
@@ -483,6 +491,66 @@ namespace ZF.Puzzle.EditorTools
                 {
                     WalkEffect(puzzle.onSolved[e], result, references, puzzleRefs, -1);
                 }
+            }
+        }
+
+        /// <summary>步骤式谜题：每步的条件/效果也要走一遍，不然 flag 读写统计会漏。</summary>
+        private static void ScanSteps(PuzzleDefinition puzzle, PuzzleScanResult result,
+            List<Reference> references, HashSet<string> puzzleRefs)
+        {
+            if (puzzle.steps == null || puzzle.steps.Count == 0)
+            {
+                result.Add(-1, false, $"谜题「{Title(puzzle)}」是步骤式但一步都没写 —— 它不会自己完成。");
+                return;
+            }
+
+            HashSet<string> stepIds = new HashSet<string>();
+            int requiredCount = 0;
+
+            for (int i = 0; i < puzzle.steps.Count; i++)
+            {
+                PuzzleStep step = puzzle.steps[i];
+                if (step == null)
+                {
+                    result.Add(-1, true, $"谜题「{Title(puzzle)}」第 {i + 1} 步是空的。");
+                    continue;
+                }
+
+                if (string.IsNullOrEmpty(step.id))
+                {
+                    result.Add(-1, true, $"谜题「{Title(puzzle)}」第 {i + 1} 步没写 id（存档进度要用）。");
+                }
+                else if (!stepIds.Add(step.id))
+                {
+                    result.Add(-1, true, $"谜题「{Title(puzzle)}」有重复的步骤 id「{step.id}」。");
+                }
+
+                if (!step.optional)
+                {
+                    requiredCount++;
+                }
+
+                if (step.conditions == null || step.conditions.Count == 0)
+                {
+                    result.Add(-1, false, $"谜题「{Title(puzzle)}」第 {i + 1} 步没写条件 —— 这一步永远不会完成。");
+                }
+                else
+                {
+                    for (int c = 0; c < step.conditions.Count; c++)
+                    {
+                        WalkCondition(step.conditions[c], result, references, puzzleRefs, -1);
+                    }
+                }
+
+                for (int e = 0; e < step.onCompleted.Count; e++)
+                {
+                    WalkEffect(step.onCompleted[e], result, references, puzzleRefs, -1);
+                }
+            }
+
+            if (requiredCount == 0)
+            {
+                result.Add(-1, false, $"谜题「{Title(puzzle)}」所有步骤都是「可选」—— 它开局就会算完成。");
             }
         }
 

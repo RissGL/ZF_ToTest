@@ -248,7 +248,18 @@ namespace ZF.Puzzle
                         continue;
                     }
 
-                    // 没写条件的谜题不会自己完成（只能被 SolvePuzzleEffect 显式完成），
+                    // 步骤式：走步骤清单（做一步勾一步，勾过的记死）
+                    if (definition.mode == PuzzleMode.Steps)
+                    {
+                        if (CheckSteps(definition, model))
+                        {
+                            SolvePuzzle(definition.id);
+                        }
+
+                        continue;
+                    }
+
+                    // 条件式：没写条件的谜题不会自己完成（只能被 SolvePuzzleEffect 显式完成），
                     // 否则一个手滑忘了填条件就会开局自动通关
                     if (definition.conditions == null || definition.conditions.Count == 0)
                     {
@@ -267,6 +278,82 @@ namespace ZF.Puzzle
 
             m_Rechecking = false;
         }
+
+        /// <summary>
+        /// 步骤式谜题：扫一遍步骤清单，把新完成的步骤勾上，返回"必做步骤是否全做完"。
+        ///
+        /// 两个要点：
+        ///   ① **勾过的不退回** —— 第一步"拿到燧石"做完了，后来燧石被用掉，这一步照样算完成
+        ///      （不然玩家做过的进度会自己倒退，体验很糟）。
+        ///   ② 要按顺序时，前面有必做步骤没完成，后面的步骤就算条件成立也**不给勾**
+        ///      （可选步骤不挡路，也不被挡）。
+        /// </summary>
+        private bool CheckSteps(PuzzleDefinition definition, IPuzzleModel model)
+        {
+            if (definition.steps == null || definition.steps.Count == 0)
+            {
+                return false;
+            }
+
+            bool allRequiredDone = true;
+            bool blocked = false;
+            int requiredTotal = 0;
+            int stepTotal = 0;
+
+            for (int i = 0; i < definition.steps.Count; i++)
+            {
+                PuzzleStep step = definition.steps[i];
+                if (step == null || string.IsNullOrEmpty(step.id))
+                {
+                    continue;
+                }
+
+                stepTotal++;
+
+                if (!step.optional)
+                {
+                    requiredTotal++;
+                }
+
+                bool done = model.IsStepDone(definition.id, step.id);
+
+                if (!done && (!definition.stepsInOrder || !blocked) && EvaluateAll(step.conditions))
+                {
+                    model.MarkStepDone(definition.id, step.id);
+                    done = true;
+
+                    ExecuteEffects(step.onCompleted, BuildContext("", Verb.Any, ""));
+
+                    definition.CountSteps(out int total, out int finished, model);
+                    this.SendEvent(new PuzzleStepCompletedEvent
+                    {
+                        PuzzleId = definition.id,
+                        PuzzleTitle = definition.title,
+                        StepId = step.id,
+                        StepTitle = step.title,
+                        StepNumber = i + 1,
+                        StepTotal = definition.steps.Count,
+                        RequiredDone = finished,
+                        RequiredTotal = total,
+                    });
+
+                    Debug.Log($"[谜题] 「{Title(definition)}」第 {i + 1} 步完成：" +
+                              $"{(string.IsNullOrEmpty(step.title) ? step.id : step.title)}" +
+                              $"（必做 {finished}/{total}）");
+                }
+
+                if (!done && !step.optional)
+                {
+                    allRequiredDone = false;
+                    blocked = true;
+                }
+            }
+
+            return requiredTotal > 0 && allRequiredDone;
+        }
+
+        private static string Title(PuzzleDefinition definition) =>
+            string.IsNullOrEmpty(definition.title) ? definition.id : definition.title;
 
         public void SolvePuzzle(string puzzleId)
         {
