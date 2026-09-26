@@ -18,11 +18,11 @@ MonoBehaviour:
     verb: 1
     itemId: 
     conditions:
-    - rid: 3013203417457229824
+    - rid: 3013203417457229894
     effects:
-    - rid: 3013203417457229825
-    - rid: 3013203417457229826
-    - rid: 3013203417457229827
+    - rid: 3013203417457229895
+    - rid: 3013203417457229896
+    - rid: 3013203417457229897
     elseFeedback: 
   - note: "\u5CA9\u58C1\uFF1A\u5DF2\u7ECF\u62A0\u8FC7\u4E86\uFF08\u515C\u5E95\uFF0C\u5FC5\u987B\u6392\u5728\u540E\u9762\uFF09"
     targetId: rock
@@ -30,19 +30,19 @@ MonoBehaviour:
     itemId: 
     conditions: []
     effects:
-    - rid: 3013203417457229828
+    - rid: 3013203417457229898
     elseFeedback: 
   - note: "\u67F4\u5806\uFF1A\u7528\u71E7\u77F3\u6253\u706B"
     targetId: woodpile
     verb: 2
     itemId: flint
     conditions:
-    - rid: 3013203417457229829
+    - rid: 3013203417457229899
     effects:
-    - rid: 3013203417457229830
-    - rid: 3013203417457229831
-    - rid: 3013203417457229832
-    - rid: 3013203417457229833
+    - rid: 3013203417457229900
+    - rid: 3013203417457229901
+    - rid: 3013203417457229902
+    - rid: 3013203417457229903
     elseFeedback: "\u4F60\u624B\u91CC\u6CA1\u6709\u80FD\u6253\u706B\u7684\u4E1C\u897F\u3002"
   - note: "\u67F4\u5806\uFF1A\u7A7A\u624B\u70B9\uFF08\u515C\u5E95\uFF09"
     targetId: woodpile
@@ -50,17 +50,17 @@ MonoBehaviour:
     itemId: 
     conditions: []
     effects:
-    - rid: 3013203417457229834
+    - rid: 3013203417457229904
     elseFeedback: 
   - note: "\u58C1\u7089\uFF1A\u706B\u79CD\u7A7F\u8FC7\u65F6\u95F4\uFF08\u8DE8\u65F6\u4EE3\u8054\u52A8\uFF0C\u6761\u4EF6\u5728\u524D\uFF09"
     targetId: hearth
     verb: 1
     itemId: 
     conditions:
-    - rid: 3013203417457229835
+    - rid: 3013203417457229905
     effects:
-    - rid: 3013203417457229836
-    - rid: 3013203417457229837
+    - rid: 3013203417457229906
+    - rid: 3013203417457229907
     elseFeedback: 
   - note: "\u58C1\u7089\uFF1A\u8FD8\u662F\u51B7\u7684\uFF08\u515C\u5E95\uFF0C\u5FC5\u987B\u6392\u5728\u540E\u9762\uFF09"
     targetId: hearth
@@ -68,145 +68,377 @@ MonoBehaviour:
     itemId: 
     conditions: []
     effects:
-    - rid: 3013203417457229838
+    - rid: 3013203417457229908
+    elseFeedback: 
+  - note: "\u4EBA\u7269\uFF1A\u70B9 \u963F\u5CA9"
+    targetId: ayan
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229909
+    elseFeedback: 
+  - note: "\u4EBA\u7269\uFF1A\u70B9 \u8001\u94DC"
+    targetId: tong
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229910
+    elseFeedback: 
+  - note: "\u4EBA\u7269\uFF1A\u70B9 \u5C0F\u706F"
+    targetId: deng
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229911
+    elseFeedback: 
+  - note: "\u4EBA\u7269\uFF1A\u70B9 \u96F6"
+    targetId: ling
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229912
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u77F3\u5668\u65F6\u4EE3 \u2192 \u84B8\u6C7D\u65F6\u4EE3\uFF08\u6761\u4EF6\u5728\u524D\uFF09"
+    targetId: rift_stone
+    verb: 1
+    itemId: 
+    conditions:
+    - rid: 3013203417457229913
+    effects:
+    - rid: 3013203417457229914
+    - rid: 3013203417457229915
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u8FD8\u95ED\u7740\uFF08\u515C\u5E95\uFF0C\u5FC5\u987B\u6392\u5728\u540E\u9762\uFF09"
+    targetId: rift_stone
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229916
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u84B8\u6C7D\u65F6\u4EE3 \u2192 \u7535\u6C14\u65F6\u4EE3\uFF08\u6761\u4EF6\u5728\u524D\uFF09"
+    targetId: rift_steam
+    verb: 1
+    itemId: 
+    conditions:
+    - rid: 3013203417457229917
+    effects:
+    - rid: 3013203417457229918
+    - rid: 3013203417457229919
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u8FD8\u95ED\u7740\uFF08\u515C\u5E95\uFF0C\u5FC5\u987B\u6392\u5728\u540E\u9762\uFF09"
+    targetId: rift_steam
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229920
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u7535\u6C14\u65F6\u4EE3 \u2192 \u4FE1\u606F\u65F6\u4EE3\uFF08\u6761\u4EF6\u5728\u524D\uFF09"
+    targetId: rift_electric
+    verb: 1
+    itemId: 
+    conditions:
+    - rid: 3013203417457229921
+    effects:
+    - rid: 3013203417457229922
+    - rid: 3013203417457229923
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u8FD8\u95ED\u7740\uFF08\u515C\u5E95\uFF0C\u5FC5\u987B\u6392\u5728\u540E\u9762\uFF09"
+    targetId: rift_electric
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229924
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u4FE1\u606F\u65F6\u4EE3 \u2192 \u77F3\u5668\u65F6\u4EE3\uFF08\u6761\u4EF6\u5728\u524D\uFF09"
+    targetId: rift_information
+    verb: 1
+    itemId: 
+    conditions:
+    - rid: 3013203417457229925
+    effects:
+    - rid: 3013203417457229926
+    - rid: 3013203417457229927
+    elseFeedback: 
+  - note: "\u65F6\u95F4\u88C2\u9699\uFF1A\u8FD8\u95ED\u7740\uFF08\u515C\u5E95\uFF0C\u5FC5\u987B\u6392\u5728\u540E\u9762\uFF09"
+    targetId: rift_information
+    verb: 1
+    itemId: 
+    conditions: []
+    effects:
+    - rid: 3013203417457229928
     elseFeedback: 
   puzzles:
   - id: P_get_flint
     title: "\u62FF\u5230\u71E7\u77F3"
     era: 0
     conditions:
-    - rid: 3013203417457229839
+    - rid: 3013203417457229929
     onSolved:
-    - rid: 3013203417457229840
+    - rid: 3013203417457229930
     isMainPuzzle: 0
   - id: P_stone_fire
     title: "\u94BB\u6728\u53D6\u706B"
     era: 0
     conditions:
-    - rid: 3013203417457229841
+    - rid: 3013203417457229931
     onSolved:
-    - rid: 3013203417457229842
+    - rid: 3013203417457229932
     isMainPuzzle: 1
   - id: P_fire_crossed
     title: "\u706B\u79CD\u7A7F\u8FC7\u65F6\u95F4"
     era: 3
     conditions:
-    - rid: 3013203417457229843
+    - rid: 3013203417457229933
     onSolved:
-    - rid: 3013203417457229844
+    - rid: 3013203417457229934
+    isMainPuzzle: 0
+  - id: P_two_together
+    title: "\u4E24\u4E2A\u4EBA\u51D1\u5728\u4E00\u8D77"
+    era: 1
+    conditions:
+    - rid: 3013203417457229935
+    onSolved:
+    - rid: 3013203417457229936
     isMainPuzzle: 0
   references:
     version: 2
     RefIds:
-    - rid: 3013203417457229824
+    - rid: 3013203417457229894
       type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         flag: rock_searched
         op: 0
         value: 0
-    - rid: 3013203417457229825
+    - rid: 3013203417457229895
       type: {class: GiveItemEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         itemId: flint
-    - rid: 3013203417457229826
+    - rid: 3013203417457229896
       type: {class: SetFlagEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         flag: rock_searched
         value: 1
-    - rid: 3013203417457229827
+    - rid: 3013203417457229897
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\u4F60\u4ECE\u5CA9\u7F1D\u91CC\u62A0\u51FA\u4E00\u5757\u71E7\u77F3\u3002"
-    - rid: 3013203417457229828
+    - rid: 3013203417457229898
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\u5CA9\u7F1D\u91CC\u4EC0\u4E48\u90FD\u6CA1\u6709\u4E86\u3002"
-    - rid: 3013203417457229829
+    - rid: 3013203417457229899
       type: {class: HasItemCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         itemId: flint
-    - rid: 3013203417457229830
+    - rid: 3013203417457229900
       type: {class: ConsumeItemEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         itemId: flint
-    - rid: 3013203417457229831
+    - rid: 3013203417457229901
       type: {class: SetFlagEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         flag: fire_lit
         value: 1
-    - rid: 3013203417457229832
+    - rid: 3013203417457229902
       type: {class: SetObjectStateEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         interactableId: woodpile
         state: lit
-    - rid: 3013203417457229833
+    - rid: 3013203417457229903
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\u706B\u661F\u843D\u8FDB\u5E72\u67F4\uFF0C\u706B\u7A9C\u8D77\u6765\u4E86\u3002"
-    - rid: 3013203417457229834
+    - rid: 3013203417457229904
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\u4E00\u5806\u5E72\u67F4\u3002\u624B\u91CC\u5F97\u6709\u4E2A\u706B\u79CD\u3002"
-    - rid: 3013203417457229835
+    - rid: 3013203417457229905
       type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         flag: fire_lit
         op: 0
         value: 1
-    - rid: 3013203417457229836
+    - rid: 3013203417457229906
       type: {class: SetFlagEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         flag: hearth_lit
         value: 1
-    - rid: 3013203417457229837
+    - rid: 3013203417457229907
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\u58C1\u7089\u81EA\u5DF1\u70E7\u8D77\u6765\u4E86 \u2014\u2014 \u706B\u79CD\u7A7F\u8FC7\u4E86\u65F6\u95F4\u3002"
-    - rid: 3013203417457229838
+    - rid: 3013203417457229908
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\u58C1\u7089\u662F\u51B7\u7684\uFF0C\u4E00\u6839\u67F4\u90FD\u6CA1\u6709\u3002"
-    - rid: 3013203417457229839
-      type: {class: HasItemCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
-      data:
-        itemId: flint
-    - rid: 3013203417457229840
+    - rid: 3013203417457229909
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
-        message: "\uFF08\u8C1C\u9898\u5B8C\u6210\uFF09\u62FF\u5230\u71E7\u77F3\u3002"
-    - rid: 3013203417457229841
+        message: "\u963F\u5CA9\uFF1A\u300C\u706B\u5F97\u6709\u4EBA\u5B88\u7740\u3002\u522B\u7684\u5E74\u5934\uFF0C\u6211\u4E5F\u60F3\u53BB\u770B\u770B\u3002\u300D"
+    - rid: 3013203417457229910
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u8001\u94DC\uFF1A\u300C\u9F7F\u8F6E\u8F6C\u8D77\u6765\u4E86\uFF0C\u5C31\u5DEE\u4E00\u53E3\u70ED\u6C14\u3002\u300D"
+    - rid: 3013203417457229911
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u5C0F\u706F\uFF1A\u300C\u706F\u662F\u4EAE\u7684\uFF0C\u53EF\u7EBF\u662F\u65AD\u7684\u3002\u300D"
+    - rid: 3013203417457229912
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u96F6\uFF1A\u300C\u4FE1\u53F7\u91CC\u6709\u4EBA\uFF0C\u4E00\u76F4\u5728\u91CD\u590D\u540C\u4E00\u53E5\u8BDD\u3002\u300D"
+    - rid: 3013203417457229913
       type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         flag: fire_lit
         op: 0
         value: 1
-    - rid: 3013203417457229842
+    - rid: 3013203417457229914
+      type: {class: MoveEraCharactersEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        fromEra: 0
+        targetEra: 1
+    - rid: 3013203417457229915
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u77F3\u5668\u65F6\u4EE3\u7684\u4EBA\u8DE8\u8FDB\u4E86\u84B8\u6C7D\u65F6\u4EE3\u7684\u7A97\u53E3\u3002"
+    - rid: 3013203417457229916
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u88C2\u9699\u8FD8\u95ED\u7740\u3002\u5F97\u5148\u8BA9\u8FD9\u4E2A\u5E74\u5934\u7684\u706B\u70B9\u8D77\u6765\u3002"
+    - rid: 3013203417457229917
+      type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        flag: fire_lit
+        op: 0
+        value: 1
+    - rid: 3013203417457229918
+      type: {class: MoveEraCharactersEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        fromEra: 1
+        targetEra: 2
+    - rid: 3013203417457229919
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u84B8\u6C7D\u65F6\u4EE3\u7684\u4EBA\u8DE8\u8FDB\u4E86\u7535\u6C14\u65F6\u4EE3\u7684\u7A97\u53E3\u3002"
+    - rid: 3013203417457229920
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u88C2\u9699\u8FD8\u95ED\u7740\u3002\u5F97\u5148\u8BA9\u8FD9\u4E2A\u5E74\u5934\u7684\u706B\u70B9\u8D77\u6765\u3002"
+    - rid: 3013203417457229921
+      type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        flag: fire_lit
+        op: 0
+        value: 1
+    - rid: 3013203417457229922
+      type: {class: MoveEraCharactersEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        fromEra: 2
+        targetEra: 3
+    - rid: 3013203417457229923
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u7535\u6C14\u65F6\u4EE3\u7684\u4EBA\u8DE8\u8FDB\u4E86\u4FE1\u606F\u65F6\u4EE3\u7684\u7A97\u53E3\u3002"
+    - rid: 3013203417457229924
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u88C2\u9699\u8FD8\u95ED\u7740\u3002\u5F97\u5148\u8BA9\u8FD9\u4E2A\u5E74\u5934\u7684\u706B\u70B9\u8D77\u6765\u3002"
+    - rid: 3013203417457229925
+      type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        flag: fire_lit
+        op: 0
+        value: 1
+    - rid: 3013203417457229926
+      type: {class: MoveEraCharactersEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        fromEra: 3
+        targetEra: 0
+    - rid: 3013203417457229927
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u4FE1\u606F\u65F6\u4EE3\u7684\u4EBA\u8DE8\u8FDB\u4E86\u77F3\u5668\u65F6\u4EE3\u7684\u7A97\u53E3\u3002"
+    - rid: 3013203417457229928
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\u88C2\u9699\u8FD8\u95ED\u7740\u3002\u5F97\u5148\u8BA9\u8FD9\u4E2A\u5E74\u5934\u7684\u706B\u70B9\u8D77\u6765\u3002"
+    - rid: 3013203417457229929
+      type: {class: HasItemCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        itemId: flint
+    - rid: 3013203417457229930
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\uFF08\u8C1C\u9898\u5B8C\u6210\uFF09\u62FF\u5230\u71E7\u77F3\u3002"
+    - rid: 3013203417457229931
+      type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        flag: fire_lit
+        op: 0
+        value: 1
+    - rid: 3013203417457229932
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\uFF08\u8C1C\u9898\u5B8C\u6210\uFF09\u77F3\u5668\u65F6\u4EE3\u901A\u5173
           \u2014\u2014 \u706B\u79CD\u6709\u4E86\u3002"
-    - rid: 3013203417457229843
+    - rid: 3013203417457229933
       type: {class: FlagCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         flag: hearth_lit
         op: 0
         value: 1
-    - rid: 3013203417457229844
+    - rid: 3013203417457229934
       type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
       data:
         delayBefore: 0
         message: "\uFF08\u8C1C\u9898\u5B8C\u6210\uFF09\u73B0\u4EE3\u58C1\u7089\u7684\u706B\uFF0C\u662F\u77F3\u5668\u65F6\u4EE3\u70B9\u8D77\u6765\u7684\u3002"
+    - rid: 3013203417457229935
+      type: {class: CharacterCountInEraCondition, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        era: 1
+        op: 3
+        count: 2
+    - rid: 3013203417457229936
+      type: {class: FeedbackEffect, ns: ZF.Puzzle, asm: Assembly-CSharp}
+      data:
+        delayBefore: 0
+        message: "\uFF08\u8C1C\u9898\u5B8C\u6210\uFF09\u84B8\u6C7D\u65F6\u4EE3\u91CC\u51D1\u9F50\u4E86\u4E24\u4E2A\u4EBA
+          \u2014\u2014 \u53EF\u4EE5\u4E00\u8D77\u52A8\u624B\u4E86\u3002"

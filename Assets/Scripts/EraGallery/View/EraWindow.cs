@@ -87,6 +87,8 @@ namespace ZF.EraGallery
 
         private void Awake()
         {
+            EraWindowRegistry.Register(this);
+
             EnsureBaseColors();
 
             if (autoFitHitArea)
@@ -94,6 +96,8 @@ namespace ZF.EraGallery
                 FitHitArea();
             }
         }
+
+        private void OnDestroy() => EraWindowRegistry.Unregister(this);
 
         public void SetBackdropVisible(bool visible)
         {

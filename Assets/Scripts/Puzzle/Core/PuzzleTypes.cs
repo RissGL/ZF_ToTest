@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using UnityEngine;
 
 namespace ZF.Puzzle
 {
@@ -38,9 +40,8 @@ namespace ZF.Puzzle
     }
 
     /// <summary>
-    /// 谜题物体的层级。窗内那套是 EraWindowSceneBuilder 定的：
+    /// 谜题相关东西的层级。窗内那套是 EraWindowSceneBuilder 定的：
     /// 内容 0 / 地景 5 / 时代序号点 7 / 边框 10 / 锁-对勾 20。
-    /// 谜题物体摆在"边框之上、标记之下"这一带。
     /// </summary>
     public static class PuzzleSortingOrder
     {
@@ -48,13 +49,15 @@ namespace ZF.Puzzle
         public const int Halo = 9;
 
         /// <summary>
-        /// 物体形状的层级起点。
-        /// ★ 同一个物体里**重叠的形状必须给递增的层级**：层级相同又重叠时画的顺序是不确定的，
+        /// 物件形状的层级起点。
+        /// ★ 同一个东西里**重叠的形状必须给递增的层级**：层级相同又重叠时画的顺序是不确定的，
         ///   表现就是"火时有时无"（壁炉本体把火苗盖住了）。
-        ///   搭建脚本按形状的先后依次 +1；手工在 Inspector 里加形状的话要么自己算，
-        ///   要么把 Interactable 的「自动排形状层级」打开。
+        ///   StateVisualBehaviour 默认按层级顺序自动排，一般不用管。
         /// </summary>
         public const int ObjectBase = 11;
+
+        /// <summary>人物形状的层级起点。比物件高 —— 人才会站在炉子/箱子前面，而不是被盖住。</summary>
+        public const int CharacterBase = 21;
     }
 
     public static class PuzzleOps
@@ -93,13 +96,27 @@ namespace ZF.Puzzle
     }
 
     /// <summary>
+    /// 一个状态对应一组物体：开哪一组，这个东西就是哪个状态。
+    /// 物件（Interactable）和人物（CharacterView）共用这一套。
+    /// </summary>
+    [Serializable]
+    public class StateGroup
+    {
+        /// <summary>状态名。</summary>
+        public string state = PuzzleStates.Default;
+
+        /// <summary>这一组物体。</summary>
+        public List<GameObject> objects = new List<GameObject>();
+    }
+
+    /// <summary>
     /// 一次交互 / 一次判定的上下文。条件读它，效果写它。
     /// 条件和效果都是纯逻辑（不碰 MonoBehaviour、不碰架构）；
-    /// 需要「发反馈」「完成谜题」这类带副作用的动作时走这里挂的回调 —— 由 PuzzleSystem 提供。
+    /// 需要「发反馈」「完成谜题」「搬人」这类动作时，走这里挂的东西 —— 由 PuzzleSystem 提供。
     /// </summary>
     public sealed class PuzzleContext
     {
-        /// <summary>被点的物体 id。</summary>
+        /// <summary>被点的物体 / 人物的 id。</summary>
         public string TargetId = "";
 
         /// <summary>玩家做的动作。</summary>
@@ -113,6 +130,12 @@ namespace ZF.Puzzle
 
         /// <summary>权威状态：flag / 物体状态 / 背包 / 已解谜题。</summary>
         public IPuzzleModel State;
+
+        /// <summary>人物状态（条件读它：人在哪个时代、一个时代里有几个人）。</summary>
+        public ICharacterModel Characters;
+
+        /// <summary>人物操作（效果用它搬人）。</summary>
+        public ICharacterSystem CharacterOps;
 
         /// <summary>玩家现在进在第几个时代里（-1 = 还在全景）。</summary>
         public int FocusedEraIndex = -1;

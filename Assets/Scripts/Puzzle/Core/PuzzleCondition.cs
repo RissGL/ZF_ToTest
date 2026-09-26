@@ -172,4 +172,96 @@ namespace ZF.Puzzle
 
         public override string Describe() => "非(" + (item != null ? item.Describe() : "空") + ")";
     }
+
+    // ===================== 人物相关 =====================
+
+    /// <summary>某个人现在是不是在这个时代里。跨时代联动（"他得先过去"）用得上。</summary>
+    [Serializable]
+    public class CharacterInEraCondition : PuzzleCondition
+    {
+        [Label("人物 id")]
+        public string characterId = "";
+
+        [Label("在哪个时代")]
+        public EraId era = EraId.Stone;
+
+        public override bool IsMet(PuzzleContext context) =>
+            context.Characters != null &&
+            context.Characters.IsKnown(characterId) &&
+            context.Characters.GetEra(characterId) == era;
+
+        public override string Describe() => $"人物[{characterId}] 在 {era}";
+    }
+
+    /// <summary>某个时代里有几个人。「要两个人凑在同一个时代才能解」就用它。</summary>
+    [Serializable]
+    public class CharacterCountInEraCondition : PuzzleCondition
+    {
+        [Label("哪个时代")]
+        public EraId era = EraId.Stone;
+
+        public FlagOp op = FlagOp.GreaterOrEqual;
+
+        [Label("人数")]
+        public float count = 2f;
+
+        public override bool IsMet(PuzzleContext context) =>
+            context.Characters != null &&
+            PuzzleOps.Compare(context.Characters.CountInEra(era), op, count);
+
+        public override string Describe() => $"{era} 里的人数 {PuzzleOps.OpText(op)} {count}";
+    }
+
+    /// <summary>
+    /// 当前点名的是不是某个人。
+    /// characterId 留空 = 「有没有点中任何人」—— 用它做「点了人就走单飞、没点人就走全体」的分支。
+    /// </summary>
+    [Serializable]
+    public class SelectedCharacterCondition : PuzzleCondition
+    {
+        [Label("人物 id（留空 = 有没有点中任何人）")]
+        public string characterId = "";
+
+        public override bool IsMet(PuzzleContext context)
+        {
+            if (context.Characters == null)
+            {
+                return false;
+            }
+
+            string selected = context.Characters.SelectedCharacter.Value;
+
+            return string.IsNullOrEmpty(characterId)
+                ? !string.IsNullOrEmpty(selected)
+                : PuzzleOps.SameState(selected, characterId);
+        }
+
+        public override string Describe() => string.IsNullOrEmpty(characterId)
+            ? "点中了某个人"
+            : $"点名的是[{characterId}]";
+    }
+
+    /// <summary>当前点名的那个人在不在这个时代 —— 「只把点中的这个人送过去」的门槛。</summary>
+    [Serializable]
+    public class SelectedCharacterInEraCondition : PuzzleCondition
+    {
+        [Label("在哪个时代")]
+        public EraId era = EraId.Stone;
+
+        public override bool IsMet(PuzzleContext context)
+        {
+            if (context.Characters == null)
+            {
+                return false;
+            }
+
+            string selected = context.Characters.SelectedCharacter.Value;
+
+            return !string.IsNullOrEmpty(selected) &&
+                   context.Characters.IsKnown(selected) &&
+                   context.Characters.GetEra(selected) == era;
+        }
+
+        public override string Describe() => $"点名的人在 {era}";
+    }
 }
