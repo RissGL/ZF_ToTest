@@ -35,8 +35,8 @@ namespace ZF.Puzzle
         [SerializeReference]
         public List<PuzzleEffect> effects = new List<PuzzleEffect>();
 
-        [Label("目标+动作匹配上了但条件不满足时的提示（留空 = 不提示）")]
-        [TextArea]
+        // 多行用 Label 的 lines 参数，不要配 [TextArea]（两个绘制器会打架，字段会叠在一起）
+        [Label("条件不满足时，对玩家说（留空 = 不提示）", 3)]
         public string elseFeedback = "";
     }
 
@@ -59,6 +59,44 @@ namespace ZF.Puzzle
         public string state = PuzzleStates.Default;
     }
 
+    /// <summary>谜题的两种写法。</summary>
+    public enum PuzzleMode
+    {
+        /// <summary>条件式：写一组完成条件，全满足就解开（简单谜题用这个）。</summary>
+        Conditions = 0,
+
+        /// <summary>步骤式：列一串步骤，做一步勾一步（多阶段谜题用这个，能显示进度）。</summary>
+        Steps = 1,
+    }
+
+    /// <summary>
+    /// 谜题的一步（步骤式用）。
+    ///
+    /// 和条件式最大的区别：**完成过就记死**。
+    /// 比如"第一步：拿到燧石"，后来燧石被用掉了，这一步**也不会退回未完成**
+    /// —— 不然玩家做过的进度会自己倒退，那种感觉非常糟。
+    /// </summary>
+    [Serializable]
+    public class PuzzleStep
+    {
+        [Label("步骤 id（存进度用，别乱改）")]
+        public string id = "";
+
+        [Label("这一步叫什么（给玩家看的提示）", 2)]
+        public string title = "";
+
+        [Label("这一步什么时候算完成（不用条件 = 永远不算完成）")]
+        [SerializeReference]
+        public List<PuzzleCondition> conditions = new List<PuzzleCondition>();
+
+        [Label("可选步骤：不做也能通关")]
+        public bool optional = false;
+
+        [Label("这一步完成时顺手做什么")]
+        [SerializeReference]
+        public List<PuzzleEffect> onCompleted = new List<PuzzleEffect>();
+    }
+
     /// <summary>
     /// 一个谜题：条件全满足就算解开（不用手动标记），是给玩家看的进度单位。
     /// 标了 isMainPuzzle 的话，解开 = 这个时代通关（会触发 EraGallery 的时代通关）。
@@ -75,7 +113,16 @@ namespace ZF.Puzzle
         [Label("属于哪个时代")]
         public EraId era = EraId.Stone;
 
-        [Label("完成条件：状态每变一次就重新检查，全部满足就自动完成")]
+        [Label("类型：条件式 / 步骤式")]
+        public PuzzleMode mode = PuzzleMode.Conditions;
+
+        [Label("步骤式：必须按顺序做（后面的步骤要等前面的必做步骤做完）")]
+        public bool stepsInOrder = true;
+
+        [Label("步骤清单（步骤式用；这时候「完成条件」那块就别填了）")]
+        public List<PuzzleStep> steps = new List<PuzzleStep>();
+
+        [Label("完成条件：状态每变一次就重新检查，全部满足就自动完成（条件式用）")]
         [SerializeReference]
         public List<PuzzleCondition> conditions = new List<PuzzleCondition>();
 
@@ -85,6 +132,34 @@ namespace ZF.Puzzle
 
         [Label("算不算「这个时代通关了」")]
         public bool isMainPuzzle = false;
+
+        /// <summary>步骤式：必做步骤一共几步、做完几步（给 UI 显示进度用）。</summary>
+        public void CountSteps(out int requiredTotal, out int requiredDone, IPuzzleModel model)
+        {
+            requiredTotal = 0;
+            requiredDone = 0;
+
+            if (steps == null || model == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < steps.Count; i++)
+            {
+                PuzzleStep step = steps[i];
+                if (step == null || step.optional || string.IsNullOrEmpty(step.id))
+                {
+                    continue;
+                }
+
+                requiredTotal++;
+
+                if (model.IsStepDone(id, step.id))
+                {
+                    requiredDone++;
+                }
+            }
+        }
     }
 
     /// <summary>

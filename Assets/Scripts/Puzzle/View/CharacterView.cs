@@ -71,16 +71,67 @@ namespace ZF.Puzzle
 
         protected override void Start()
         {
-            // 基类负责订阅「谜题状态」（状态组/外观），这里再补一个「人物位置」
+            // 基类负责订阅「谜题状态」（状态组/外观），这里再补一个「人物位置」和「动画请求」
             base.Start();
 
             m_Characters?.Revision.Register(_ => Refresh()).UnregisterOnDestroyTrigger(this);
+            this.RegisterEvent<CharacterAnimationEvent>(OnAnimationRequested).UnregisterOnDestroyTrigger(this);
             Refresh();
         }
 
         /// <summary>换个时代。搬动了返回 true；已经在那个时代 / 不认识这个人返回 false。</summary>
         public bool TryMoveTo(EraId era) =>
             m_CharacterSystem != null && m_CharacterSystem.TryMove(characterId, era);
+
+        // ===================== 动画接口 =====================
+        //
+        // 规则表里这样编排（不用写代码）：
+        //   PlayCharacterAnimation("leave")  →  MoveSelectedCharacter(delayBefore = 0.6)  →  PlayCharacterAnimation("arrive")
+        // 「等动画播完」由效果基类的 delayBefore 负责。
+
+        private void OnAnimationRequested(CharacterAnimationEvent e)
+        {
+            if (!PuzzleOps.SameState(e.CharacterId, characterId))
+            {
+                return;
+            }
+
+            OnPlayAnimation(e.Clip);
+        }
+
+        /// <summary>
+        /// 【换真动画就 override 这里】接 Animator.SetTrigger / DOTween 序列 / 帧动画都行。
+        /// 默认实现只是几个占位缩放，保证"看得出他走了"。
+        /// </summary>
+        protected virtual void OnPlayAnimation(string clip)
+        {
+            switch (clip)
+            {
+                case "leave":
+                    PlayLeavePlaceholder();
+                    return;
+
+                case "arrive":
+                    PlayArriveFeedback();
+                    return;
+
+                default:
+                    PlayArriveFeedback();
+                    return;
+            }
+        }
+
+        /// <summary>离场占位：缩小 + 朝裂隙那边（右侧）挪一点，像被吸进去。</summary>
+        private void PlayLeavePlaceholder()
+        {
+            transform.DOKill();
+            transform.localScale = Vector3.one;
+
+            Sequence sequence = DOTween.Sequence();
+            sequence.Append(transform.DOScale(new Vector3(0.25f, 0.25f, 1f), 0.45f).SetEase(Ease.InBack));
+            sequence.Join(transform.DOLocalMoveX(transform.localPosition.x + 1.2f, 0.45f).SetEase(Ease.InQuad));
+            sequence.SetUpdate(true);
+        }
 
         public override void Refresh()
         {
@@ -150,5 +201,7 @@ namespace ZF.Puzzle
             transform.localScale = Vector3.one;
             transform.DOPunchScale(Vector3.one * 0.22f, 0.4f, 6, 0.7f).SetUpdate(true);
         }
+
+        private void OnDestroy() => transform.DOKill();
     }
 }

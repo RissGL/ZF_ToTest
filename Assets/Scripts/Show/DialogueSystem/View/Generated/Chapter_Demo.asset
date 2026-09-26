@@ -1,0 +1,138 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e21ba352f736407f9a3f0543014f6999, type: 3}
+  m_Name: Chapter_Demo
+  m_EditorClassIdentifier: 
+  chapterId: demo
+  startGroupId: Group_1
+  groups:
+  - groupId: Group_1
+    templateId: 0
+    transitionId: manga_dissolve
+    transitionDirection: 0
+    transitionColor: {r: 0.31706125, g: 0.7075472, b: 0.7075472, a: 0.98039216}
+    transitionDuration: 0.5
+    enterAudio: {fileID: 0}
+    bubbleStyle: {fileID: 0}
+    cast: []
+    groupTexts:
+    - speaker: {fileID: 11400000, guid: e26d0d77b0acee342bb8c0c118cc862c, type: 2}
+      text: "\u5582\uFF0C\u4F60\u770B\u89C1\u521A\u624D\u90A3\u4E2A\u5F71\u5B50\u4E86\u5417\uFF1F"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    - speaker: {fileID: 11400000, guid: e26d0d77b0acee342bb8c0c118cc862c, type: 2}
+      text: "\u522B\u88C5\u6CA1\u542C\u89C1\uFF0C\u5C31\u5728\u4FBF\u5229\u5E97\u90A3\u8FB9\u3002"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    - speaker: {fileID: 11400000, guid: 4b6dc912cd60173479be4029b22b6100, type: 2}
+      text: "\u2026\u2026\u6211\u4EC0\u4E48\u90FD\u6CA1\u770B\u89C1\u3002"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    choices: []
+    nextGroupId: Group_2
+  - groupId: Group_2
+    templateId: 2
+    transitionId: wipe_rl
+    transitionDirection: 100
+    transitionColor: {r: 0.19166073, g: 0.48718542, b: 0.6886792, a: 1}
+    transitionDuration: 0.5
+    enterAudio: {fileID: 0}
+    bubbleStyle: {fileID: 0}
+    cast:
+    - {fileID: 11400000, guid: 4b6dc912cd60173479be4029b22b6100, type: 2}
+    - {fileID: 11400000, guid: e26d0d77b0acee342bb8c0c118cc862c, type: 2}
+    - {fileID: 11400000, guid: 0600a37b821c08440bd832dc73a5d42c, type: 2}
+    groupTexts:
+    - speaker: {fileID: 0}
+      text: "\u4FBF\u5229\u5E97\u7684\u706F\u95EA\u4E86\u4E24\u4E0B\u3002"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    - speaker: {fileID: 11400000, guid: e26d0d77b0acee342bb8c0c118cc862c, type: 2}
+      text: "\u770B\u5427\uFF0C\u6211\u5C31\u8BF4\u6709\u4E1C\u897F\u3002"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    - speaker: {fileID: 11400000, guid: 4b6dc912cd60173479be4029b22b6100, type: 2}
+      text: "\u90A3\u662F\u7535\u538B\u4E0D\u7A33\u3002"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    choices: []
+    nextGroupId: Group_3
+  - groupId: Group_3
+    templateId: 1
+    transitionId: manga_dissolve
+    transitionDirection: 100
+    transitionColor: {r: 0.5189569, g: 0.9245283, b: 0.83636063, a: 1}
+    transitionDuration: 0.5
+    enterAudio: {fileID: 0}
+    bubbleStyle: {fileID: 0}
+    cast: []
+    groupTexts:
+    - speaker: {fileID: 11400000, guid: e26d0d77b0acee342bb8c0c118cc862c, type: 2}
+      text: "\u8981\u4E0D\u8981\u8FDB\u53BB\u770B\u770B\uFF1F"
+      expression: 1
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    choices:
+    - text: "\u8FDB\u5E97\u770B\u770B"
+      targetGroupId: Group_4
+    - text: "\u8FD8\u662F\u522B\u591A\u4E8B"
+      targetGroupId: Group_5
+    nextGroupId: 
+  - groupId: Group_4
+    templateId: 0
+    transitionId: bars_in
+    transitionDirection: 100
+    transitionColor: {r: 0, g: 0, b: 0, a: 0}
+    transitionDuration: 0.5
+    enterAudio: {fileID: 0}
+    bubbleStyle: {fileID: 0}
+    cast: []
+    groupTexts:
+    - speaker: {fileID: 11400000, guid: e26d0d77b0acee342bb8c0c118cc862c, type: 2}
+      text: "\u2026\u2026\u597D\u5427\uFF0C\u8DDF\u7D27\u6211\u3002"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    choices: []
+    nextGroupId: 
+  - groupId: Group_5
+    templateId: 1
+    transitionId: wipe_lr
+    transitionDirection: 100
+    transitionColor: {r: 0, g: 0, b: 0, a: 0}
+    transitionDuration: 0.5
+    enterAudio: {fileID: 0}
+    bubbleStyle: {fileID: 0}
+    cast: []
+    groupTexts:
+    - speaker: {fileID: 11400000, guid: 4b6dc912cd60173479be4029b22b6100, type: 2}
+      text: "\u8FD9\u624D\u5BF9\u561B\uFF0C\u56DE\u5BB6\u3002"
+      expression: 0
+      audioEff: {fileID: 0}
+      bubbleStyle: {fileID: 0}
+      slotId: 
+    choices: []
+    nextGroupId: 

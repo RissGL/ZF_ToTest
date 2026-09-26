@@ -26,6 +26,14 @@ namespace ZF.Puzzle
         /// </summary>
         bool Select(string characterId);
 
+        /// <summary>
+        /// 【动画接口】要求某个人播一段动画。characterId 留空 = 当前点名的那个。
+        /// 这只是**发事件**（`CharacterAnimationEvent`），状态一个都不改 ——
+        /// 所以规则表里可以把它和 Move* 效果用 `delayBefore` 排成
+        /// 「播离场动画 → 等一会儿 → 真搬 → 播到场动画」这样一条链。
+        /// </summary>
+        bool PlayAnimation(string characterId, string clip);
+
         /// <summary>所有人回到自己开局的年代。</summary>
         void ResetAll();
     }
@@ -122,6 +130,24 @@ namespace ZF.Puzzle
             model.SetSelectedCharacter(value);
 
             this.SendEvent(new CharacterSelectedEvent { CharacterId = value });
+            return true;
+        }
+
+        public bool PlayAnimation(string characterId, string clip)
+        {
+            ICharacterModel model = this.GetModel<ICharacterModel>();
+
+            // 留空 = 点名的那个人
+            string target = !string.IsNullOrEmpty(characterId)
+                ? characterId
+                : model != null ? model.SelectedCharacter.Value : "";
+
+            if (string.IsNullOrEmpty(target) || model == null || !model.IsKnown(target))
+            {
+                return false;
+            }
+
+            this.SendEvent(new CharacterAnimationEvent { CharacterId = target, Clip = clip ?? "" });
             return true;
         }
 

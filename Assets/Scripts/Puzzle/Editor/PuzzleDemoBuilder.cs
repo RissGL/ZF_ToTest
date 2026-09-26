@@ -130,7 +130,9 @@ namespace ZF.Puzzle.EditorTools
             // （平时表是新的就不动它，免得把你在 Inspector 里改过的规则冲掉）
             PuzzleTableSO existing = AssetDatabase.LoadAssetAtPath<PuzzleTableSO>(TablePath);
             bool stale = existing != null &&
-                         (!HasRuleFor(existing, RiftId(EraId.Stone)) || !HasEffect<SelectCharacterEffect>(existing));
+                         (!HasRuleFor(existing, RiftId(EraId.Stone)) ||
+                          !HasEffect<PlayCharacterAnimationEffect>(existing) ||
+                          !HasStepPuzzle(existing));
 
             PuzzleTableSO table = EnsureTable(stale);
             if (stale)
@@ -176,8 +178,9 @@ namespace ZF.Puzzle.EditorTools
                       "  按 Play，然后：\n" +
                       "  1. 进石器时代 → 点岩壁拿「燧石」→ Tab 拿在手里 → 点柴堆点火\n" +
                       "     （火一起，四个时代的裂隙同时张开；石器时代窗口亮对勾）\n" +
-                      "  2. 【单独送一个人】点**阿岩**（他被点名，身上会亮框）→ 点**时间裂隙** → 只有他一个人过去，阿石留下\n" +
-                      "  3. 【整个时代一起走】点阿岩再点一次取消点名 → 点**时间裂隙** → 石器时代的人一起过去\n" +
+                      "  2. 【单独移动一个人】点**阿岩**（他被点名，身上亮框）→ 点**时间裂隙**\n" +
+                      "     → 他先播「离场」动画缩进去，等 0.55 秒真的搬过去，再播「到场」弹出来；阿石留下\n" +
+                      "  3. 【整个时代一起走】再点一次阿岩取消点名 → 点**时间裂隙** → 石器时代剩下的人一起过去\n" +
                       "  4. 进蒸汽时代看：阿岩/阿石站在老铜旁边，三个人自动分开站好\n" +
                       "     （「蒸汽时代里有两个人」这个谜题这时会自己完成 → 演示「一起解密」的判定）\n" +
                       "  5. 回全景进信息时代 → **壁炉自己烧起来了**（石器时代点的火）\n" +
@@ -427,6 +430,25 @@ namespace ZF.Puzzle.EditorTools
             return false;
         }
 
+        /// <summary>表里有没有步骤式谜题。用来判断这张表是不是旧版本搭出来的。</summary>
+        private static bool HasStepPuzzle(PuzzleTableSO table)
+        {
+            if (table == null || table.puzzles == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < table.puzzles.Count; i++)
+            {
+                if (table.puzzles[i] != null && table.puzzles[i].mode == PuzzleMode.Steps)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>表里有没有用到某种效果。用来判断这张表是不是旧版本搭出来的。</summary>
         private static bool HasEffect<T>(PuzzleTableSO table) where T : PuzzleEffect
         {
@@ -559,7 +581,7 @@ namespace ZF.Puzzle.EditorTools
             };
 
             // ---- 人物：点他 = **点名**（再点一次取消），顺便说一句台词 ----
-            // 点名的那个就是"单独送走"的对象，见下面时间裂隙的第 1 条规则。
+            // 点名之后**再去点时间裂隙**才会走 —— 见下面裂隙的第 1 条规则。
             for (int i = 0; i < CharacterIds.Length; i++)
             {
                 rules.Add(new InteractionRule
@@ -575,17 +597,17 @@ namespace ZF.Puzzle.EditorTools
 
                 rules.Add(new InteractionRule
                 {
-                    note = $"人物 {CharacterNames[i]}：点名",
+                    note = $"人物 {CharacterNames[i]}：点名（再去点裂隙他才走）",
                     targetId = CharacterIds[i],
                     verb = Verb.Interact,
                     conditions = Conditions(),
                     effects = Effects(
                         new SelectCharacterEffect { characterId = CharacterIds[i] },
-                        new FeedbackEffect { message = $"点名{CharacterNames[i]}。{CharacterLines[i]}" }),
+                        new FeedbackEffect { message = $"点名{CharacterNames[i]}，去点时间裂隙送他走。{CharacterLines[i]}" }),
                 });
             }
 
-            // ---- 时间裂隙：每个时代一个。三条路，条件从特殊到通用 ----
+            // ---- 时间裂隙：每个时代一个。**点裂隙 = 把点名的那个人送走**（没点名就整个时代一起走）----
             for (int i = 0; i < EraCatalog.All.Length; i++)
             {
                 EraId era = EraCatalog.All[i].id;
@@ -593,20 +615,22 @@ namespace ZF.Puzzle.EditorTools
                 string eraTitle = EraCatalog.Get(era).title;
                 string nextTitle = EraCatalog.Get(next).title;
 
-                // ① 点名了人、而且那个人就在这个时代 → **只送他一个人**
+                // ① 点名了人、而且那个人就在这个时代 → **只送他一个人**，并且串上动画：
+                //    播离场动画 → 等 0.55 秒（delayBefore）→ 真搬 → 播到场动画
                 rules.Add(new InteractionRule
                 {
-                    note = $"时间裂隙：只送点名的那个人 {eraTitle} → {nextTitle}",
+                    note = $"时间裂隙：只送点名的那个人 {eraTitle} → {nextTitle}（带离场/到场动画）",
                     targetId = RiftId(era),
                     verb = Verb.Interact,
-                    // 条件顺序无所谓（全都要满足），关键是这条规则要排在"全体走"前面
                     conditions = Conditions(FlagOn("fire_lit"), new SelectedCharacterInEraCondition { era = era }),
                     effects = Effects(
-                        new MoveSelectedCharacterEffect { targetEra = next },
+                        new PlayCharacterAnimationEffect { characterId = "", clip = "leave" },
+                        new MoveSelectedCharacterEffect { targetEra = next, delayBefore = 0.55f },
+                        new PlayCharacterAnimationEffect { characterId = "", clip = "arrive" },
                         new FeedbackEffect { message = $"你点名的那个人一个人跨进了{nextTitle}。" }),
                 });
 
-                // ② 没点名（或点名的人不在这个时代），这个时代有人 → **整个时代一起走**
+                // ② 没点名（或点名的人不在这个时代），这个时代有人 → 整个时代一起走
                 rules.Add(new InteractionRule
                 {
                     note = $"时间裂隙：整个 {eraTitle} 一起走 → {nextTitle}",
@@ -623,7 +647,7 @@ namespace ZF.Puzzle.EditorTools
                         new FeedbackEffect { message = $"{eraTitle}的人一起跨进了{nextTitle}的窗口。" }),
                 });
 
-                // ③ 裂隙开着但这个时代没人
+                // ② 裂隙开着但这个时代没人
                 rules.Add(new InteractionRule
                 {
                     note = "时间裂隙：这个时代没人",
@@ -633,7 +657,7 @@ namespace ZF.Puzzle.EditorTools
                     effects = Effects(new FeedbackEffect { message = $"{eraTitle}里已经没有人了。" }),
                 });
 
-                // ④ 兜底：裂隙还闭着（必须排最后）
+                // ③ 兜底：裂隙还闭着（必须排最后）
                 rules.Add(new InteractionRule
                 {
                     note = "时间裂隙：还闭着（兜底，必须排在后面）",
@@ -662,11 +686,30 @@ namespace ZF.Puzzle.EditorTools
                 },
                 new PuzzleDefinition
                 {
+                    // 【步骤式】两步，做一步勾一步；勾过的记死（燧石后来被用掉，第一步也不会退回）
                     id = "P_stone_fire",
                     title = "钻木取火",
                     era = EraId.Stone,
-                    conditions = Conditions(FlagOn("fire_lit")),
-                    onSolved = Effects(new FeedbackEffect { message = "（谜题完成）石器时代通关 —— 火种有了。" }),
+                    mode = PuzzleMode.Steps,
+                    stepsInOrder = true,
+                    steps = new List<PuzzleStep>
+                    {
+                        new PuzzleStep
+                        {
+                            id = "s1",
+                            title = "先找块能打火的东西",
+                            conditions = Conditions(Item("flint")),
+                            onCompleted = Effects(new FeedbackEffect { message = "（第 1 步完成）手里有燧石了。" }),
+                        },
+                        new PuzzleStep
+                        {
+                            id = "s2",
+                            title = "把柴堆点着",
+                            conditions = Conditions(FlagOn("fire_lit")),
+                            onCompleted = Effects(new FeedbackEffect { message = "（第 2 步完成）火种有了。" }),
+                        },
+                    },
+                    onSolved = Effects(new FeedbackEffect { message = "（谜题完成）石器时代通关 —— 两步都做完了。" }),
                     isMainPuzzle = true,   // 主线：解开 = 石器时代通关，窗口亮对勾
                 },
                 new PuzzleDefinition
