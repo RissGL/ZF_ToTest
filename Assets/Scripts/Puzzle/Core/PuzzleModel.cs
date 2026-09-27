@@ -64,6 +64,13 @@ namespace ZF.Puzzle
         /// <summary>显示名（没登记的返回 id 本身）。文案里的 {目标名} / {人物名} 用它。</summary>
         string GetTargetDisplayName(string interactionId);
 
+        // ---- 链条：这个物体是哪条链的第几环 ----
+        // 和类别/时代/显示名同一个路子：组件在 Awake 里登记，是场景内容。
+        // 有了它，"上一环亮了才能点这一环"才能是**一条规则管所有链上的所有节点**。
+        void SetTargetChain(string interactionId, string chainId, int stage);
+        string GetTargetChain(string interactionId);
+        int GetTargetStage(string interactionId);
+
         /// <summary>
         /// 挂在它身上的一句额外文案（文案里的 {目标说} 用它，比如"被点名时的一句台词"）。
         /// 通配规则（"任意人物：点名"）说不了每个人不同的话，这句就是那个出口。
@@ -115,6 +122,8 @@ namespace ZF.Puzzle
             public EraId Era;
             public string Category;
             public string DisplayName;
+            public string Chain;
+            public int Stage;
         }
 
         public IReadOnlyBindableProperty<int> Revision => m_Revision;
@@ -317,6 +326,35 @@ namespace ZF.Puzzle
 
             m_Speeches[interactionId] = text ?? "";
         }
+
+        // ===================== 链条 =====================
+
+        public void SetTargetChain(string interactionId, string chainId, int stage)
+        {
+            if (string.IsNullOrEmpty(interactionId))
+            {
+                return;
+            }
+
+            if (!m_Targets.TryGetValue(interactionId, out TargetInfo info))
+            {
+                info = new TargetInfo();
+                m_Targets[interactionId] = info;
+            }
+
+            info.Chain = chainId ?? "";
+            info.Stage = stage;
+        }
+
+        public string GetTargetChain(string interactionId) =>
+            !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                ? info.Chain ?? ""
+                : "";
+
+        public int GetTargetStage(string interactionId) =>
+            !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                ? info.Stage
+                : 0;
 
         // ===================== 谜题 =====================
 

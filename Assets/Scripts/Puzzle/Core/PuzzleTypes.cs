@@ -223,6 +223,66 @@ namespace ZF.Puzzle
     }
 
     /// <summary>
+    /// 「链」：**早期发明对后续时代的连锁影响**。
+    ///
+    /// 策划的图就是一串链：原始人发现骨针 → 中世纪皮甲 → 现代衣物 → 未来服饰。
+    /// 每一环是一个场景里的物体（带 `chain` + `stage` 两个字段），
+    /// 「上一环亮了才能点这一环」由框架判定，**不用给每个节点写规则** ——
+    /// 否则七条链 × 三四个时代 = 二十多条一模一样的规则，加一条链就要补四行。
+    ///
+    /// 链的状态就是 flag（`chain_needle_s2`）：它本来就是"全局状态"，
+    /// 所以链条天然跨时代可见（石器时代点亮第一环，蒸汽时代那一环立刻跟着亮），存档也只是一行 JSON。
+    /// </summary>
+    public static class PuzzleChain
+    {
+        public const string FlagPrefix = "chain_";
+
+        /// <summary>第几环的 flag 名：chain_needle_s2。</summary>
+        public static string Flag(string chainId, int stage) => $"{FlagPrefix}{chainId}_s{stage}";
+
+        /// <summary>这个目标带链信息吗（没填 chain / stage 的物体不参与链条）。</summary>
+        public static bool HasChain(PuzzleContext context) =>
+            context != null && !string.IsNullOrEmpty(context.TargetChain) && context.TargetStage >= 1;
+
+        /// <summary>这一环的上一环亮了吗（第 1 环永远算"轮到了"）。</summary>
+        public static bool IsReady(PuzzleContext context)
+        {
+            if (!HasChain(context) || context.State == null)
+            {
+                return false;
+            }
+
+            if (context.TargetStage <= 1)
+            {
+                return true;
+            }
+
+            return context.State.GetFlag(Flag(context.TargetChain, context.TargetStage - 1)) != 0f;
+        }
+
+        /// <summary>这一环自己亮了吗。</summary>
+        public static bool IsLit(PuzzleContext context) =>
+            HasChain(context) && context.State != null &&
+            context.State.GetFlag(Flag(context.TargetChain, context.TargetStage)) != 0f;
+
+        /// <summary>点亮这一环（把它的 flag 写 1）。</summary>
+        public static bool Light(PuzzleContext context)
+        {
+            if (!HasChain(context) || context.State == null)
+            {
+                return false;
+            }
+
+            context.State.SetFlag(Flag(context.TargetChain, context.TargetStage), 1f);
+            return true;
+        }
+
+        /// <summary>人话：`needle` + 2 → 「needle 第 2 环」。</summary>
+        public static string Text(string chainId, int stage) =>
+            string.IsNullOrEmpty(chainId) ? "" : $"{chainId} 第 {stage} 环";
+    }
+
+    /// <summary>
     /// 一次交互 / 一次判定的上下文。条件读它，效果写它。
     /// 条件和效果都是纯逻辑（不碰 MonoBehaviour、不碰架构）；
     /// 需要「发反馈」「完成谜题」「搬人」这类动作时，走这里挂的东西 —— 由 PuzzleSystem 提供。
@@ -237,6 +297,12 @@ namespace ZF.Puzzle
 
         /// <summary>被点的目标现在在哪个时代。人物问人物模型，物体问登记表。</summary>
         public EraId TargetEra = EraId.Stone;
+
+        /// <summary>被点的目标属于哪条链（没填 = ""）。见 PuzzleChain。</summary>
+        public string TargetChain = "";
+
+        /// <summary>它在链上是第几环（1 开始；0 = 不参与链条）。</summary>
+        public int TargetStage;
 
         /// <summary>玩家做的动作。</summary>
         public Verb Verb = Verb.Any;

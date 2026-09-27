@@ -51,15 +51,34 @@ Mark_Locked   窗口下方的锁（✕ 两根斜杠拼的）
 Mark_Done     窗口下方的对勾（✓ 两根斜杠拼的）
 ```
 
+### 窗口尺寸只有两行要改
+
+窗口内容现在是 **9.8 × 5.88**（2x2 排布，间距 11.2 × 7.1，聚焦框 10.6 × 6.6）。
+里面所有图案 / 序号点 / 锁对勾都是按**设计稿 6 × 3.6** 的坐标写的，
+`EraWindowSceneBuilder` 里的 `S / P() / Sz()` 会按 `ContentWidth / 6` **等比放大**它们 ——
+所以改窗口大小只需要动 `ContentWidth` / `ContentHeight`，图案会跟着长，不会"框变大了里面还是小小一坨"。
+
+> **★ 一条踩过的经验：窗口上的东西（时代名 / 年代 / 序号点 / 锁-对勾）全都放在窗口里面。**
+> 相机取景 = 聚焦框，聚焦框 = 窗口 + 挂在窗口外面的东西。挂在外面 → 聚焦框变高 → 全景得拉得更远 →
+> **字就糊**（原来挂在外面时全景只有 60 px/世界单位，碑上的小字只剩 13 px）。
+> 现在全部收进窗口里，聚焦框收到 10.6 × 6.6，全景约 79 px/单位、聚焦时约 164 px/单位。
+> 所以顶上留了一条（序号点 / 时代名 / 锁-对勾）和底下一行（年代 / 提示文字）——
+> **以后往窗口上加东西，优先往这两条里塞，别挂到窗口外面去。**
+
 ### 关于文字
 
-**这个工程里目前一个字体资源都没有**（没有 `Assets/TextMesh Pro`、没有 TMP_FontAsset、没有 ttf），
-所以窗口上暂时不画时代名，只用「主题色 + 几何剪影 + 序号点 + 锁定/通关标记」区分，
-时代名和年代打在 Console 里。
+文字走 **TextMeshPro**（工程里 TMP essentials 和一份中文字体资产都有）：
 
-等工程里导入中文字体（TMP Essential Resources + 一份带中文的 TTF/SDF）之后，
-在 `EraWindow` 上加一个 `TextMeshPro` 引用、在 `ApplyVisual` 里刷文字就行，
-`EraWindow` 上的 `title` / `timeline` 已经把数据备好了，窗口下方预留了标记那一行位置。
+| 东西 | 位置 |
+| --- | --- |
+| 字体源文件 | `Assets/OTF/SourceHanSerifSC-Medium.otf`（思源宋体） |
+| TMP 字体资产 | `Assets/OTF/SourceHanSerifSC-Medium SDF.asset`（动态图集，点大小 90） |
+
+窗口上的**时代名**（边框上面）和**年代**（边框下面一行）就是用它画的（`TextMeshPro` 组件 = TMP 的 3D 文本）。
+
+一个坑记在这儿：TMP 的 `fontSize` 是"点"，**和世界单位不是一回事**。所以
+`EraWindowSceneBuilder.CreateLabel` 传的是"我想让它多高"（世界单位），
+它自己量一次 `preferredHeight` 再按比例缩放 transform —— 换字体、换字号都不用回来改那几十处坐标。
 
 ---
 

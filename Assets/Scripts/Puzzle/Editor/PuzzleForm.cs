@@ -43,6 +43,8 @@ namespace ZF.Puzzle.EditorTools
             E<CharacterCountInEraCondition>("人物", "某个时代里有几个人", () => new CharacterCountInEraCondition { op = FlagOp.GreaterOrEqual, count = 2f }),
             E<SelectedCharacterCondition>("人物", "点名的是某个人", () => new SelectedCharacterCondition()),
             E<SelectedCharacterInEraCondition>("人物", "点名的人在某个时代", () => new SelectedCharacterInEraCondition()),
+            E<ChainStageReadyCondition>("链条", "它这一环的上一环亮了", () => new ChainStageReadyCondition()),
+            E<ChainStageLitCondition>("链条", "它这一环已经亮了", () => new ChainStageLitCondition()),
             E<EraFocusedCondition>("时代窗口", "玩家正进在某个时代里", () => new EraFocusedCondition()),
             E<AndCondition>("组合", "「全部」满足", () => new AndCondition()),
             E<OrCondition>("组合", "「任意一个」满足", () => new OrCondition()),
@@ -64,6 +66,7 @@ namespace ZF.Puzzle.EditorTools
             E<MoveEraCharactersEffect>("人物", "一个时代的人整体搬走", () => new MoveEraCharactersEffect()),
             E<SelectCharacterEffect>("人物", "点名 / 取消点名", () => new SelectCharacterEffect()),
             E<PlayCharacterAnimationEffect>("人物", "让他播一段动画（动画接口）", () => new PlayCharacterAnimationEffect()),
+            E<LightChainStageEffect>("链条", "点亮它这一环（连锁反应）", () => new LightChainStageEffect()),
             E<FeedbackEffect>("给玩家", "说一句话", () => new FeedbackEffect()),
             E<DebugLogEffect>("给玩家", "只写 Console", () => new DebugLogEffect()),
         };
@@ -609,6 +612,14 @@ namespace ZF.Puzzle.EditorTools
                     EraRefRow(element, "eraRef", "era", false);
                     return;
 
+                case ChainStageReadyCondition _:
+                    EditorGUILayout.LabelField("（它这一环的上一环已经亮了 —— 第 1 环永远算轮到）", EditorStyles.miniLabel);
+                    return;
+
+                case ChainStageLitCondition _:
+                    EditorGUILayout.LabelField("（它自己这一环已经亮了）", EditorStyles.miniLabel);
+                    return;
+
                 case EraFocusedCondition _:
                     EraPopup(element.FindPropertyRelative("era"));
                     return;
@@ -701,6 +712,10 @@ namespace ZF.Puzzle.EditorTools
                 case FeedbackEffect _:
                     EditorGUILayout.LabelField("说：", GUILayout.Width(28f));
                     Text(element.FindPropertyRelative("message"), 0f);
+                    return;
+
+                case LightChainStageEffect _:
+                    EditorGUILayout.LabelField("（点亮被点的那个东西在它那条链上的这一环）", EditorStyles.miniLabel);
                     return;
 
                 case DebugLogEffect _:

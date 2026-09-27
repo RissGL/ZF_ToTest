@@ -33,6 +33,9 @@ namespace ZF.Puzzle
         [SerializeField] private EraId homeEra = EraId.Stone;
 
         [Header("站位（在时代窗口里的位置）")]
+        [Label("站位的横向基准（正数往右；地景左边一般留给提示文字）")]
+        [SerializeField] private float seatX = 0f;
+
         [Label("站位高度（脚底贴着地景上沿）")]
         [SerializeField] private float seatY = -0.70f;
 
@@ -187,7 +190,7 @@ namespace ZF.Puzzle
             }
 
             float offset = (slot - (peers.Count - 1) * 0.5f) * seatSpacing;
-            transform.localPosition = new Vector3(offset, seatY, 0f);
+            transform.localPosition = new Vector3(seatX + offset, seatY, 0f);
 
             // 第一次摆位不抖；之后每次换时代抖一下，至少让人看得出"他过去了"
             if (m_Placed && m_ShownEra != era)

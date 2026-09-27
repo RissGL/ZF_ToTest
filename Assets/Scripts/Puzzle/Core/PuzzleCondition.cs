@@ -175,6 +175,29 @@ namespace ZF.Puzzle
         public override string Describe() => "非(" + (item != null ? item.Describe() : "空") + ")";
     }
 
+    // ===================== 链条相关 =====================
+
+    /// <summary>
+    /// 「被点的这个，轮到它了吗」—— 它在链上的上一环亮了就算轮到。
+    /// 第 1 环永远算轮到，所以**一条规则能管整条链上的所有节点**（第一环也照常点得动）。
+    /// </summary>
+    [Serializable]
+    public class ChainStageReadyCondition : PuzzleCondition
+    {
+        public override bool IsMet(PuzzleContext context) => PuzzleChain.IsReady(context);
+
+        public override string Describe() => "它这一环的上一环已经亮了（第 1 环永远算轮到）";
+    }
+
+    /// <summary>「被点的这个，自己这一环亮了吗」—— 物体的外观规则、以及"已经亮过了"的提示用它。</summary>
+    [Serializable]
+    public class ChainStageLitCondition : PuzzleCondition
+    {
+        public override bool IsMet(PuzzleContext context) => PuzzleChain.IsLit(context);
+
+        public override string Describe() => "它自己这一环已经亮了";
+    }
+
     // ===================== 人物相关 =====================
 
     /// <summary>
