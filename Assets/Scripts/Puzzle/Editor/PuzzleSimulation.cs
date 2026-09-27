@@ -103,6 +103,8 @@ namespace ZF.Puzzle.EditorTools
                 TargetId = targetId ?? "",
                 TargetCategory = Characters.IsKnown(targetId) ? PuzzleCategories.Character : Puzzle.GetTargetCategory(targetId),
                 TargetEra = Characters.IsKnown(targetId) ? Characters.GetEra(targetId) : Puzzle.GetTargetEra(targetId),
+                TargetChain = Characters.IsKnown(targetId) ? "" : Puzzle.GetTargetChain(targetId),
+                TargetStage = Characters.IsKnown(targetId) ? 0 : Puzzle.GetTargetStage(targetId),
                 Verb = verb,
                 UsedItemId = itemId ?? "",
                 State = Puzzle,
@@ -211,6 +213,8 @@ namespace ZF.Puzzle.EditorTools
                 public EraId Era;
                 public string Category;
                 public string DisplayName;
+                public string Chain;
+                public int Stage;
             }
 
             public IReadOnlyBindableProperty<int> Revision => m_Revision;
@@ -358,6 +362,33 @@ namespace ZF.Puzzle.EditorTools
                     m_Speeches[interactionId] = text ?? "";
                 }
             }
+
+            public void SetTargetChain(string interactionId, string chainId, int stage)
+            {
+                if (string.IsNullOrEmpty(interactionId))
+                {
+                    return;
+                }
+
+                if (!m_Targets.TryGetValue(interactionId, out TargetInfo info))
+                {
+                    info = new TargetInfo();
+                    m_Targets[interactionId] = info;
+                }
+
+                info.Chain = chainId ?? "";
+                info.Stage = stage;
+            }
+
+            public string GetTargetChain(string interactionId) =>
+                !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                    ? info.Chain ?? ""
+                    : "";
+
+            public int GetTargetStage(string interactionId) =>
+                !string.IsNullOrEmpty(interactionId) && m_Targets.TryGetValue(interactionId, out TargetInfo info)
+                    ? info.Stage
+                    : 0;
 
             public string ToJson() => "";
             public void LoadJson(string json) { }

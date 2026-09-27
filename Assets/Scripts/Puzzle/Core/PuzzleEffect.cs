@@ -147,6 +147,21 @@ namespace ZF.Puzzle
         public override string Describe() => $"日志：{message}";
     }
 
+    // ===================== 链条相关 =====================
+
+    /// <summary>
+    /// 点亮**被点的这个**在链上的那一环（写它的 flag）。
+    /// 这是"连锁反应"的发动机：点上一环 → 它的 flag 亮 → 下一个时代那一环的条件就满足了。
+    /// 不用写任何 flag 名 —— flag 名是 chain + stage 拼出来的（见 PuzzleChain.Flag）。
+    /// </summary>
+    [Serializable]
+    public class LightChainStageEffect : PuzzleEffect
+    {
+        public override void Execute(PuzzleContext context) => PuzzleChain.Light(context);
+
+        public override string Describe() => "点亮它这一环";
+    }
+
     // ===================== 人物相关 =====================
 
     /// <summary>

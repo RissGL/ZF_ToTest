@@ -471,6 +471,8 @@ namespace ZF.Puzzle
                 TargetEra = isCharacter
                     ? characters.GetEra(target)
                     : (model != null ? model.GetTargetEra(target) : EraId.Stone),
+                TargetChain = isCharacter || model == null ? "" : model.GetTargetChain(target),
+                TargetStage = isCharacter || model == null ? 0 : model.GetTargetStage(target),
                 Verb = verb,
                 UsedItemId = itemId ?? "",
                 State = model,

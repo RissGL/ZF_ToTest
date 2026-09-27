@@ -38,6 +38,14 @@ namespace ZF.Puzzle.EditorTools
         /// <summary>id → 摆在哪个时代（物体；人物看 homeEra）。</summary>
         public readonly Dictionary<string, EraId> EraOf = new Dictionary<string, EraId>();
 
+        /// <summary>id → 它在哪条链的第几环。</summary>
+        public readonly Dictionary<string, string> ChainOf = new Dictionary<string, string>();
+        public readonly Dictionary<string, int> StageOf = new Dictionary<string, int>();
+
+        /// <summary>链 id → 这条链上有哪些环（环数 → 物体 id）。用来查"断环"和时代顺序。</summary>
+        public readonly Dictionary<string, SortedDictionary<int, string>> Chains =
+            new Dictionary<string, SortedDictionary<int, string>>();
+
         public readonly HashSet<string> WrittenFlags = new HashSet<string>();
         public readonly HashSet<string> ReadFlags = new HashSet<string>();
         public readonly HashSet<string> GivenItems = new HashSet<string>();
@@ -132,6 +140,7 @@ namespace ZF.Puzzle.EditorTools
             ValidateReferences(result, references);
             ValidateFlags(result);
             ValidatePuzzles(table, result, puzzleRefs);
+            ValidateChains(result);
 
             return result;
         }
@@ -166,6 +175,64 @@ namespace ZF.Puzzle.EditorTools
                 else if (views[i] is Interactable interactable && !string.IsNullOrEmpty(id))
                 {
                     result.EraOf[id] = interactable.Era;
+                }
+
+                // 链条：这个物体是哪条链的第几环
+                if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(views[i].Chain) && views[i].Stage >= 1)
+                {
+                    result.ChainOf[id] = views[i].Chain;
+                    result.StageOf[id] = views[i].Stage;
+
+                    if (!result.Chains.TryGetValue(views[i].Chain, out SortedDictionary<int, string> stages))
+                    {
+                        stages = new SortedDictionary<int, string>();
+                        result.Chains[views[i].Chain] = stages;
+                    }
+
+                    stages[views[i].Stage] = id;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 链条体检：**断环**（第 3 环摆着，第 1/2 环却没人）和**时代顺序**（越往后越早的时代）。
+        /// 这两种错在场景里看不出来 —— 表现都是"点它没反应"，属于最费时间的一类问题。
+        /// </summary>
+        private static void ValidateChains(PuzzleScanResult result)
+        {
+            foreach (KeyValuePair<string, SortedDictionary<int, string>> pair in result.Chains)
+            {
+                string chainId = pair.Key;
+                SortedDictionary<int, string> stages = pair.Value;
+
+                int expected = 1;
+                EraId previousEra = EraId.Stone;
+                bool hasPrevious = false;
+
+                foreach (KeyValuePair<int, string> stage in stages)
+                {
+                    if (stage.Key != expected)
+                    {
+                        result.Add(-1, true,
+                            $"链「{chainId}」断了：有第 {stage.Key} 环（{stage.Value}），却没有第 {expected} 环 —— " +
+                            "缺的那一环没人点，后面这些永远亮不起来。");
+                        break;
+                    }
+
+                    if (result.EraOf.TryGetValue(stage.Value, out EraId era))
+                    {
+                        if (hasPrevious && (int)era < (int)previousEra)
+                        {
+                            result.Add(-1, false,
+                                $"链「{chainId}」的时代顺序反了：第 {stage.Key} 环（{stage.Value}）比上一环还早。 " +
+                                "连锁是「早期发明影响后面的时代」，顺序错了玩家得先跑后面才能点前面。");
+                        }
+
+                        previousEra = era;
+                        hasPrevious = true;
+                    }
+
+                    expected++;
                 }
             }
         }
@@ -404,6 +471,24 @@ namespace ZF.Puzzle.EditorTools
                     result.ReadFlags.Add(flag.flag);
                     return;
 
+                case ChainStageReadyCondition _:
+                    // 「上一环亮了吗」读的是**被点的那个目标**上一环的 flag —— 静态扫描不知道点的是谁，
+                    // 所以把所有链的（第 2 环起的）flag 都算成"读了"。
+                    foreach (string chainFlag in ChainFlags(result, skipFirstStage: true))
+                    {
+                        result.ReadFlags.Add(chainFlag);
+                    }
+
+                    return;
+
+                case ChainStageLitCondition _:
+                    foreach (string chainFlag in ChainFlags(result, skipFirstStage: false))
+                    {
+                        result.ReadFlags.Add(chainFlag);
+                    }
+
+                    return;
+
                 case ObjectStateCondition state:
                     AddTargetRef(references, state.interactableId, ruleIndex, "条件的物体");
                     return;
@@ -464,6 +549,16 @@ namespace ZF.Puzzle.EditorTools
                     result.WrittenFlags.Add(flag.flag);
                     return;
 
+                case LightChainStageEffect _:
+                    // 点亮的是**被点的那个目标**自己那一环 —— 静态扫描不知道点的是谁，
+                    // 所以把所有链上所有环的 flag 都算成"写了"（不然校验会说它们只读不写）。
+                    foreach (string chainFlag in ChainFlags(result, skipFirstStage: false))
+                    {
+                        result.WrittenFlags.Add(chainFlag);
+                    }
+
+                    return;
+
                 case AddFlagEffect flag:
                     result.WrittenFlags.Add(flag.flag);
                     return;
@@ -510,9 +605,29 @@ namespace ZF.Puzzle.EditorTools
         }
 
         /// <summary>
-        /// 登记一个「目标类」引用。`@self` 不用校验（它就是被点的那个），
-        /// `@类别` 校验类别存不存在，具体 id 校验场景里有没有。
+        /// 场景里所有链的 flag（`chain_<链>_s<环>`）。链条相关的新条件/效果是"看着被点的那个目标"算的，
+        /// 静态扫描不知道玩家会点谁，只能把整条链的 flag 都算上 —— 保守，但不会漏报。
         /// </summary>
+        private static List<string> ChainFlags(PuzzleScanResult result, bool skipFirstStage)
+        {
+            List<string> flags = new List<string>();
+
+            foreach (KeyValuePair<string, SortedDictionary<int, string>> pair in result.Chains)
+            {
+                foreach (KeyValuePair<int, string> stage in pair.Value)
+                {
+                    if (skipFirstStage && stage.Key <= 1)
+                    {
+                        continue;
+                    }
+
+                    flags.Add(PuzzleChain.Flag(pair.Key, stage.Key));
+                }
+            }
+
+            return flags;
+        }
+
         private static void AddTargetRef(List<Reference> references, string value, int ruleIndex, string where)
         {
             if (string.IsNullOrEmpty(value))

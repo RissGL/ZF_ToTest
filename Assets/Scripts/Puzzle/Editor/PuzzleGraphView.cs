@@ -472,6 +472,12 @@ namespace ZF.Puzzle.EditorTools
                     graph.AddEdge(graph.Get("obj:" + character.characterId), to);
                     return;
 
+                // 链条那两个条件是"看着被点的那个目标"算的：它读的是**目标自己那条链**的 flag，
+                // 静态画不出线来（点谁才知道）。所以不画线，改在图里的规则标题上标「链」。
+                case ChainStageReadyCondition _:
+                case ChainStageLitCondition _:
+                    return;
+
                 case AndCondition and:
                     for (int i = 0; i < and.items.Count; i++)
                     {
@@ -504,6 +510,10 @@ namespace ZF.Puzzle.EditorTools
 
                 case AddFlagEffect flag:
                     graph.AddEdge(from, graph.Get("flag:" + flag.flag));
+                    return;
+
+                // 点亮的是"被点的那个目标自己那一环"：写哪个 flag 要点下去才知道，静态画不出线
+                case LightChainStageEffect _:
                     return;
 
                 case GiveItemEffect item:

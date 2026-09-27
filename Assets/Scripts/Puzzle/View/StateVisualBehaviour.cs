@@ -34,6 +34,13 @@ namespace ZF.Puzzle
         [Label("类别（规则表写 @类别 就能一次管一批，如 @rift；留空 = prop）")]
         [SerializeField] protected string category = "";
 
+        [Header("链条（早期发明对后续时代的连锁影响）")]
+        [Label("属于哪条链（如 needle；留空 = 不参与链条）")]
+        [SerializeField] protected string chain = "";
+
+        [Label("是这条链的第几环（1 开始；上一环亮了才点得动它）")]
+        [SerializeField] protected int stage;
+
         [Label("悬停高亮（可为空）")]
         [SerializeField] protected SpriteRenderer hoverFrame;
 
@@ -70,6 +77,12 @@ namespace ZF.Puzzle
         public string Category =>
             string.IsNullOrEmpty(category) ? DefaultCategory : category;
 
+        /// <summary>它属于哪条链（"" = 不参与链条）。规则里的「上一环亮了吗 / 点亮这一环」看这两个。</summary>
+        public string Chain => chain ?? "";
+
+        /// <summary>它在链上是第几环（1 开始；0 = 不参与链条）。</summary>
+        public int Stage => stage;
+
         /// <summary>类别留空时算哪一类。</summary>
         protected virtual string DefaultCategory => PuzzleCategories.Prop;
 
@@ -98,6 +111,7 @@ namespace ZF.Puzzle
             // 同理：规则要按类别批量命中、要知道"被点的这个在哪个时代"，都只有组件自己知道
             PuzzleState?.RegisterTarget(InteractionId, SceneEra, Category, DisplayName);
             PuzzleState?.SetTargetSpeech(InteractionId, speech);
+            PuzzleState?.SetTargetChain(InteractionId, chain, stage);
 
             if (baseSortingOrder < 0)
             {
@@ -325,7 +339,10 @@ namespace ZF.Puzzle
             for (int i = 0; i < renderers.Length; i++)
             {
                 Renderer renderer = renderers[i];
-                if (renderer == null || renderer == hoverFrame)
+
+                // 只量形状（SpriteRenderer）：文字标签是 MeshRenderer，
+                // 算进去的话点击区域会莫名其妙地长高一块
+                if (!(renderer is SpriteRenderer) || renderer == hoverFrame)
                 {
                     continue;
                 }

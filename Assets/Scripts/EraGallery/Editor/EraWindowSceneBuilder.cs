@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -27,15 +28,116 @@ namespace ZF.EraGallery.EditorTools
         private const string RootName = "EraWorld";
 
         // 占位窗口尺寸（世界单位）。改这里的话，EraWindow 上的聚焦框也要跟着改。
-        private const float ContentWidth = 6f;
-        private const float ContentHeight = 3.6f;
-        private const float FrameThickness = 0.16f;
-        private const float PitchX = 7.8f;
-        private const float PitchY = 5.6f;
-        private const float FocusWidth = 6.8f;
-        private const float FocusHeight = 5.0f;
-        private const float FocusOffsetY = -0.35f;
-        private const float MarkY = -2.35f;
+        //
+        // ★ 窗口里所有图案 / 序号点 / 状态标记都是按**设计稿 6 × 3.6** 摆的，
+        //   尺寸改了它们会跟着 DesignScale 等比放大（见 S / P / Sz），所以窗口大小只有下面这两行要改。
+        private const float ContentWidth = 9.8f;
+        private const float ContentHeight = 5.88f;
+        private const float FrameThickness = 0.18f;
+
+        // ★ 相机取景 = 聚焦框；聚焦框 = 窗口 + 外面挂的东西。
+        //   所以时代名 / 年代 / 序号点 / 锁-对勾**全部放进窗口里**（下面那三条 InsetY / 左右贴边），
+        //   聚焦框才收得紧，全景才不用拉那么远，字才不糊。
+        //   排得紧还有第二个好处：四个窗口之间的空白少了。
+        private const float PitchX = 11.2f;
+        private const float PitchY = 7.1f;
+        private const float FocusWidth = 10.6f;
+        private const float FocusHeight = 6.6f;
+        private const float FocusOffsetY = -0.05f;
+
+        /// <summary>顶上那条（序号点 / 时代名 / 年代）的高度（窗口局部坐标）。</summary>
+        private const float TopBandY = ContentHeight * 0.5f - 0.30f;
+
+        /// <summary>底下那条（提示 / 锁-对勾）的高度。</summary>
+        private const float BottomBandY = -ContentHeight * 0.5f + 0.28f;
+
+        /// <summary>左右贴边的位置。</summary>
+        private const float SideInsetX = ContentWidth * 0.5f - 0.28f;
+
+        /// <summary>设计稿尺寸：下面所有图案坐标都是按这个尺寸写死的。</summary>
+        private const float DesignWidth = 6f;
+
+        /// <summary>等比放大系数。窗口变大 → 图案跟着变大，不然框大了里面还是小小一坨。</summary>
+        private static float S => ContentWidth / DesignWidth;
+
+        /// <summary>设计稿坐标 → 实际坐标。</summary>
+        private static Vector2 P(float x, float y) => new Vector2(x * S, y * S);
+
+        /// <summary>设计稿尺寸 → 实际尺寸。</summary>
+        private static Vector2 Sz(float width, float height) => new Vector2(width * S, height * S);
+
+        /// <summary>工程里唯一的中文字体（思源宋体），已经烘成 TMP 的 SDF 字体资产。世界里的文字都用它。</summary>
+        internal const string FontAssetPath = "Assets/OTF/SourceHanSerifSC-Medium SDF.asset";
+
+        /// <summary>文字的绘制层级：压在所有图形上面（但窗口被关掉时它跟着一起消失）。</summary>
+        internal const int TextOrder = 60;
+
+        internal static TMP_FontAsset LoadFontAsset()
+        {
+            TMP_FontAsset font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(FontAssetPath);
+            if (font == null)
+            {
+                Debug.LogWarning($"[文字] 找不到 TMP 字体资产「{FontAssetPath}」，场景里的文字标签会是空的。");
+            }
+
+            return font;
+        }
+
+        /// <summary>
+        /// 世界空间里的一行字（TMP 的 3D 文本）。
+        ///
+        /// worldHeight = 想让它多高（世界单位）：TMP 的 fontSize 是"点"，跟世界单位不是一回事，
+        /// 所以这里量一次实际高度再按比例缩放 transform —— 换字体 / 换字号都不用回来改坐标。
+        /// anchor = MiddleLeft 时，center 指的是**文字左边**（那行"要接上：…"就是靠它贴左边的）。
+        /// </summary>
+        internal static TextMeshPro CreateLabel(Transform parent, string name, string text, Vector2 center,
+            float worldHeight, Color color, TMP_FontAsset font, int sortingOrder,
+            TextAnchor anchor = TextAnchor.MiddleCenter)
+        {
+            GameObject go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(center.x, center.y, 0f);
+
+            TextMeshPro tmp = go.AddComponent<TextMeshPro>();
+            tmp.font = font;
+            tmp.text = text ?? "";
+            tmp.color = color;
+            tmp.fontSize = LabelFontSize;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.enableWordWrapping = false;
+            tmp.overflowMode = TextOverflowModes.Overflow;
+            tmp.richText = false;
+            tmp.raycastTarget = false;
+
+            tmp.ForceMeshUpdate();
+
+            float measured = tmp.preferredHeight;
+            float scale = measured > 0.0001f ? Mathf.Max(0.0001f, worldHeight) / measured : 1f;
+
+            // 左对齐：把整块往右挪半个宽度，让"文字左边"落在 center 上；右对齐反过来
+            if (anchor == TextAnchor.MiddleLeft || anchor == TextAnchor.UpperLeft || anchor == TextAnchor.LowerLeft)
+            {
+                float width = tmp.preferredWidth * scale;
+                go.transform.localPosition += new Vector3(width * 0.5f, 0f, 0f);
+            }
+            else if (anchor == TextAnchor.MiddleRight || anchor == TextAnchor.UpperRight || anchor == TextAnchor.LowerRight)
+            {
+                float width = tmp.preferredWidth * scale;
+                go.transform.localPosition -= new Vector3(width * 0.5f, 0f, 0f);
+            }
+
+            go.transform.localScale = Vector3.one * scale;
+
+            if (tmp.renderer != null)
+            {
+                tmp.renderer.sortingOrder = sortingOrder;
+            }
+
+            return tmp;
+        }
+
+        /// <summary>字号（点）。跟世界单位无关 —— 实际大小由 CreateLabel 按 worldHeight 缩放。</summary>
+        private const float LabelFontSize = 36f;
 
         [MenuItem("Tools/时代窗口/搭建四个时代窗口场景", false, 10)]
         public static void Build()
@@ -160,15 +262,12 @@ namespace ZF.EraGallery.EditorTools
 
             // 地景：内容底部一条压暗的横条，让块面看着像「一片地方」而不是一个色板
             tinted.Add(CreateRect(go.transform, "Ground",
-                new Vector2(0f, -ContentHeight * 0.5f + 0.25f),
-                new Vector2(ContentWidth, 0.5f),
+                new Vector2(0f, -ContentHeight * 0.5f + 0.25f * S),
+                new Vector2(ContentWidth, 0.5f * S),
                 Mul(theme, 0.55f), EraSortingOrder.Decoration, white));
 
             // 时代图案：四个时代各一套剪影，一眼能分辨
             tinted.AddRange(BuildEraSignature(go.transform, data.id, theme, white));
-
-            // 时代序号点：亮几个就是第几个时代
-            tinted.AddRange(BuildOrderDots(go.transform, index, theme, white));
 
             // 边框：四条纯色边拼的矩形框（省掉九宫格图）
             Color frameColor = Color.Lerp(theme, Color.white, 0.5f);
@@ -188,7 +287,24 @@ namespace ZF.EraGallery.EditorTools
                     new Vector2(FrameThickness, ContentHeight), frameColor, EraSortingOrder.Frame, white),
             };
 
-            BuildStateMarks(go.transform, out GameObject markLocked, out GameObject markDone, white);
+            // 锁 / 对勾也跟着进窗口：放在**顶上那条的右端**（那里也都在窗口里）
+            BuildStateMarks(go.transform, new Vector2(SideInsetX - 0.30f, TopBandY),
+                out GameObject markLocked, out GameObject markDone, white);
+
+            // 顶上一整条（窗口里面）：左边序号点、中间时代名、右端锁-对勾。
+            // 年代放到底下那条的右端（和谜题那边的"要接上：…"同一行，一左一右）。
+            // ★ 全都在窗口里 —— 挂到外面去聚焦框就得跟着变高，全景拉远，字就糊。
+            TMP_FontAsset font = LoadFontAsset();
+            if (font != null)
+            {
+                tinted.AddRange(BuildOrderDots(go.transform, index, theme, white));
+
+                CreateLabel(go.transform, "Title", data.title, new Vector2(0f, TopBandY),
+                    0.46f, Color.Lerp(theme, Color.white, 0.90f), font, TextOrder);
+
+                CreateLabel(go.transform, "Timeline", data.timeline, new Vector2(SideInsetX, BottomBandY + 0.02f),
+                    0.17f, Color.Lerp(theme, Color.white, 0.50f), font, TextOrder, TextAnchor.MiddleRight);
+            }
 
             // 默认规则下四个时代一开始就都能进，所以两个标记都先收起来。
             // 以后要改成一关一关解，EraWorldController 上的解锁规则换成 PreviousCompleted 即可，
@@ -219,13 +335,13 @@ namespace ZF.EraGallery.EditorTools
                     for (int i = 0; i < widths.Length; i++)
                     {
                         shapes.Add(CreateRect(parent, $"Sig_Pyramid_{i}",
-                            new Vector2(-1f, baseY + i * barHeight),
-                            new Vector2(widths[i], barHeight), color, EraSortingOrder.Decoration, white));
+                            P(-1f, baseY + i * barHeight),
+                            Sz(widths[i], barHeight), color, EraSortingOrder.Decoration, white));
                     }
 
                     // 太阳
-                    shapes.Add(CreateRect(parent, "Sig_Sun", new Vector2(1.75f, 0.85f),
-                        new Vector2(0.62f, 0.62f), color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateRect(parent, "Sig_Sun", P(1.75f, 0.85f),
+                        Sz(0.62f, 0.62f), color, EraSortingOrder.Decoration, white));
                     break;
                 }
 
@@ -239,36 +355,36 @@ namespace ZF.EraGallery.EditorTools
                     for (int i = 0; i < heights.Length; i++)
                     {
                         shapes.Add(CreateRect(parent, $"Sig_Chimney_{i}",
-                            new Vector2(xs[i], baseY + heights[i] * 0.5f),
-                            new Vector2(0.36f, heights[i]), color, EraSortingOrder.Decoration, white));
+                            P(xs[i], baseY + heights[i] * 0.5f),
+                            Sz(0.36f, heights[i]), color, EraSortingOrder.Decoration, white));
                     }
 
-                    shapes.Add(CreateRect(parent, "Sig_Base", new Vector2(-1.35f, baseY - 0.14f),
-                        new Vector2(2.6f, 0.28f), color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateRect(parent, "Sig_Base", P(-1.35f, baseY - 0.14f),
+                        Sz(2.6f, 0.28f), color, EraSortingOrder.Decoration, white));
 
                     // 齿轮：一个方块加十字
-                    shapes.Add(CreateRect(parent, "Sig_GearHub", new Vector2(1.6f, 0.35f),
-                        new Vector2(0.7f, 0.7f), color, EraSortingOrder.Decoration, white));
-                    shapes.Add(CreateRect(parent, "Sig_GearV", new Vector2(1.6f, 0.35f),
-                        new Vector2(0.22f, 1.15f), color, EraSortingOrder.Decoration, white));
-                    shapes.Add(CreateRect(parent, "Sig_GearH", new Vector2(1.6f, 0.35f),
-                        new Vector2(1.15f, 0.22f), color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateRect(parent, "Sig_GearHub", P(1.6f, 0.35f),
+                        Sz(0.7f, 0.7f), color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateRect(parent, "Sig_GearV", P(1.6f, 0.35f),
+                        Sz(0.22f, 1.15f), color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateRect(parent, "Sig_GearH", P(1.6f, 0.35f),
+                        Sz(1.15f, 0.22f), color, EraSortingOrder.Decoration, white));
                     break;
                 }
 
                 case EraId.Electric:
                 {
                     // 闪电：两段斜杠
-                    shapes.Add(CreateBar(parent, "Sig_BoltA", new Vector2(-2f, 0.95f), new Vector2(-1.25f, -0.05f),
-                        0.26f, color, EraSortingOrder.Decoration, white));
-                    shapes.Add(CreateBar(parent, "Sig_BoltB", new Vector2(-1.65f, 0.15f), new Vector2(-0.85f, -0.95f),
-                        0.26f, color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateBar(parent, "Sig_BoltA", P(-2f, 0.95f), P(-1.25f, -0.05f),
+                        0.26f * S, color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateBar(parent, "Sig_BoltB", P(-1.65f, 0.15f), P(-0.85f, -0.95f),
+                        0.26f * S, color, EraSortingOrder.Decoration, white));
 
                     // 灯 + 电线：电线压到灯下面（同一层级又重叠的话画的顺序不确定）
-                    shapes.Add(CreateRect(parent, "Sig_Wire", new Vector2(0.35f, 0.6f),
-                        new Vector2(1.7f, 0.09f), Mul(color, 0.7f), EraSortingOrder.Decoration, white));
-                    shapes.Add(CreateRect(parent, "Sig_Bulb", new Vector2(1.5f, 0.6f),
-                        new Vector2(0.66f, 0.66f), color, EraSortingOrder.Decoration + 1, white));
+                    shapes.Add(CreateRect(parent, "Sig_Wire", P(0.35f, 0.6f),
+                        Sz(1.7f, 0.09f), Mul(color, 0.7f), EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateRect(parent, "Sig_Bulb", P(1.5f, 0.6f),
+                        Sz(0.66f, 0.66f), color, EraSortingOrder.Decoration + 1, white));
                     break;
                 }
 
@@ -276,12 +392,12 @@ namespace ZF.EraGallery.EditorTools
                 {
                     // 节点网格 + 连线
                     const float step = 0.72f;
-                    Vector2 origin = new Vector2(-1.75f, 0.1f);
+                    Vector2 origin = P(-1.75f, 0.1f);
 
                     shapes.Add(CreateRect(parent, "Sig_GridH", origin,
-                        new Vector2(step * 2f + 0.22f, 0.09f), Mul(color, 0.6f), EraSortingOrder.Decoration, white));
+                        Sz(step * 2f + 0.22f, 0.09f), Mul(color, 0.6f), EraSortingOrder.Decoration, white));
                     shapes.Add(CreateRect(parent, "Sig_GridV", origin,
-                        new Vector2(0.09f, step * 2f + 0.22f), Mul(color, 0.6f), EraSortingOrder.Decoration, white));
+                        Sz(0.09f, step * 2f + 0.22f), Mul(color, 0.6f), EraSortingOrder.Decoration, white));
 
                     for (int row = 0; row < 3; row++)
                     {
@@ -291,16 +407,16 @@ namespace ZF.EraGallery.EditorTools
                             float size = isCenter ? 0.34f : 0.24f;
 
                             shapes.Add(CreateRect(parent, $"Sig_Node_{row}_{column}",
-                                origin + new Vector2((column - 1) * step, (row - 1) * step),
-                                new Vector2(size, size),
+                                origin + new Vector2((column - 1) * step, (row - 1) * step) * S,
+                                Sz(size, size),
                                 isCenter ? Color.Lerp(color, Color.white, 0.5f) : color,
                                 EraSortingOrder.Decoration + 1, white));
                         }
                     }
 
                     // 外圈
-                    shapes.Add(CreateRect(parent, "Sig_Ring", new Vector2(1.85f, 0.1f),
-                        new Vector2(0.7f, 0.7f), color, EraSortingOrder.Decoration, white));
+                    shapes.Add(CreateRect(parent, "Sig_Ring", P(1.85f, 0.1f),
+                        Sz(0.7f, 0.7f), color, EraSortingOrder.Decoration, white));
                     break;
                 }
             }
@@ -308,49 +424,52 @@ namespace ZF.EraGallery.EditorTools
             return shapes;
         }
 
-        /// <summary>内容左上角一排小点：亮几个就是第几个时代。</summary>
+        /// <summary>
+        /// 一排小点：亮几个就是第几个时代。
+        /// 摆在**窗口里面**的左上角（和时代名同一行）—— 挂到窗口外面会把聚焦框撑高，全景就得拉远。
+        /// </summary>
         private static List<SpriteRenderer> BuildOrderDots(Transform parent, int index, Color theme, Sprite white)
         {
             List<SpriteRenderer> dots = new List<SpriteRenderer>();
-            Color on = Color.Lerp(theme, Color.white, 0.75f);
-            Color off = Mul(theme, 0.32f);
+            Color on = Color.Lerp(theme, Color.white, 0.85f);
+            Color off = Mul(theme, 0.30f);
 
-            const float startX = -2.68f;
-            const float step = 0.26f;
-            const float y = 1.48f;
-            const float size = 0.16f;
+            const float startX = -SideInsetX + 0.10f;
+            const float step = 0.30f;
+            const float size = 0.20f;
 
             for (int i = 0; i < EraCatalog.Count; i++)
             {
-                dots.Add(CreateRect(parent, $"Order_{i}", new Vector2(startX + i * step, y),
+                dots.Add(CreateRect(parent, $"Order_{i}", new Vector2(startX + i * step, TopBandY),
                     new Vector2(size, size), i <= index ? on : off, EraSortingOrder.Decoration + 2, white));
             }
 
             return dots;
         }
 
-        /// <summary>窗口下方那排状态标记：锁 / 对勾。都是两根斜杠拼的。</summary>
-        private static void BuildStateMarks(Transform parent, out GameObject markLocked, out GameObject markDone, Sprite white)
+        /// <summary>窗口里那排状态标记：锁 / 对勾。都是两根斜杠拼的。</summary>
+        private static void BuildStateMarks(Transform parent, Vector2 position,
+            out GameObject markLocked, out GameObject markDone, Sprite white)
         {
             GameObject lockedRoot = new GameObject("Mark_Locked");
             lockedRoot.transform.SetParent(parent, false);
-            lockedRoot.transform.localPosition = new Vector3(0f, MarkY, 0f);
+            lockedRoot.transform.localPosition = new Vector3(position.x, position.y, 0f);
 
             Color lockedColor = new Color(0.66f, 0.63f, 0.70f, 1f);
-            CreateBar(lockedRoot.transform, "LockA", new Vector2(-0.22f, 0.22f), new Vector2(0.22f, -0.22f),
-                0.13f, lockedColor, EraSortingOrder.Mark, white);
-            CreateBar(lockedRoot.transform, "LockB", new Vector2(-0.22f, -0.22f), new Vector2(0.22f, 0.22f),
-                0.13f, lockedColor, EraSortingOrder.Mark, white);
+            CreateBar(lockedRoot.transform, "LockA", P(-0.22f, 0.22f), P(0.22f, -0.22f),
+                0.13f * S, lockedColor, EraSortingOrder.Mark, white);
+            CreateBar(lockedRoot.transform, "LockB", P(-0.22f, -0.22f), P(0.22f, 0.22f),
+                0.13f * S, lockedColor, EraSortingOrder.Mark, white);
 
             GameObject doneRoot = new GameObject("Mark_Done");
             doneRoot.transform.SetParent(parent, false);
-            doneRoot.transform.localPosition = new Vector3(0f, MarkY, 0f);
+            doneRoot.transform.localPosition = new Vector3(position.x, position.y, 0f);
 
             Color doneColor = new Color(0.70f, 0.94f, 0.72f, 1f);
-            CreateBar(doneRoot.transform, "CheckA", new Vector2(-0.3f, 0.05f), new Vector2(-0.05f, -0.2f),
-                0.12f, doneColor, EraSortingOrder.Mark, white);
-            CreateBar(doneRoot.transform, "CheckB", new Vector2(-0.05f, -0.2f), new Vector2(0.32f, 0.26f),
-                0.12f, doneColor, EraSortingOrder.Mark, white);
+            CreateBar(doneRoot.transform, "CheckA", P(-0.3f, 0.05f), P(-0.05f, -0.2f),
+                0.12f * S, doneColor, EraSortingOrder.Mark, white);
+            CreateBar(doneRoot.transform, "CheckB", P(-0.05f, -0.2f), P(0.32f, 0.26f),
+                0.12f * S, doneColor, EraSortingOrder.Mark, white);
 
             markLocked = lockedRoot;
             markDone = doneRoot;
