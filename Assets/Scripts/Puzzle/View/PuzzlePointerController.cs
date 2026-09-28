@@ -11,6 +11,9 @@ namespace ZF.Puzzle
     /// 谜题那边的鼠标：悬停高亮 + 点击交互 + 切换手里的道具。
     /// 和 EraWorldController 各自扫自己的东西，互不干扰 ——
     /// 因为「已经进到某个时代里」的时候，EraWorldController 那一点会走 TryFocus(同一个窗口) 直接被规则挡掉。
+    ///
+    /// 气泡（谜题反馈那套）正在说话时：**点到了东西照点**，气泡自己在同一帧退场；
+    /// 只有"点空白处"那一下的意思才是"把气泡关掉"（见下面 Update 里的注释）。
     /// </summary>
     [DisallowMultipleComponent]
     public class PuzzlePointerController : MonoBehaviour, IController
@@ -67,6 +70,14 @@ namespace ZF.Puzzle
                 return;
             }
 
+            // Tab（换手里的道具）先处理掉：它跟气泡在不在说话、跟鼠标在不在都没关系 ——
+            // 不然"刚抠下燧石，想拿在手里"这一下会被气泡吞掉。
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard[cycleKey].wasPressedThisFrame)
+            {
+                this.SendCommand<CycleSelectedItemCommand>();
+            }
+
             Mouse mouse = Mouse.current;
             if (mouse == null)
             {
@@ -78,15 +89,13 @@ namespace ZF.Puzzle
 
             SetHovered(PickBehaviour(worldPoint));
 
+            // ★ 气泡（谜题反馈那套）**不吞"点东西"的这一下**：点到谁就是点谁，气泡在同一帧自己退场。
+            //   以前是"气泡显示期间整个场景点击都挡掉"，代价是每交互一次都要先多点一下把气泡关掉 ——
+            //   在"点石头工具拿燧石 → 点钻木取火"这种连着点的流程里，就是白白多出来的那一下。
+            //   （点空白处什么都不会发生，那一下本来就只是"关气泡"。）
             if (mouse.leftButton.wasPressedThisFrame && m_Hovered != null)
             {
                 this.SendCommand(new InteractCommand(m_Hovered.InteractionId));
-            }
-
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard[cycleKey].wasPressedThisFrame)
-            {
-                this.SendCommand<CycleSelectedItemCommand>();
             }
         }
 

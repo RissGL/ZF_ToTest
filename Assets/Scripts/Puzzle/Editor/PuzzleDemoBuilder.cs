@@ -4,8 +4,10 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using ZF.DialoguePresentation;
 using ZF.EraGallery;
 using ZF.EraGallery.EditorTools;
+using ZF.Game;
 using Object = UnityEngine.Object;
 
 namespace ZF.Puzzle.EditorTools
@@ -383,12 +385,13 @@ namespace ZF.Puzzle.EditorTools
 
             Debug.Log($"[谜题] 连锁测试场景搭好了：{Chains.Length} 条链 × 各时代一环，一共 {CountStages()} 个链节点 + 时光机 + 4 个时间裂隙 + {CharacterIds.Length} 个人物。\n" +
                       "  玩法（按 Play）：\n" +
-                      "  1. 进石器时代 → 点**石头工具**拿「燧石」→ Tab 拿在手里 → 点**钻木取火**（第一环亮了）\n" +
+                      "  1. 进石器时代 → 点**石头工具**拿「燧石」→ 直接点**钻木取火**（燧石会自动拿在手里用掉，第一环亮了）\n" +
                       "  2. 点火之后：石头工具/钻木取火那一格亮起来 → 回全景看，蒸汽时代对应的格子跟着亮了\n" +
                       "  3. 进蒸汽时代 → 点亮着的那一环 → 它点亮电气时代对应的格子……**七条链各自往下传**\n" +
                       "  4. 同一格的链条在四个时代里是**纵向对齐**的（第 3 条链永远在第 3 格），所以一眼看得出「这条链传到哪了」\n" +
                       "  5. 七条链全部接上 → 信息时代的**时光机**启动（那是主线：未来人穿越回过去）\n" +
                       "  6. 人物照旧：点人物 = 点名/取消点名，点时间裂隙 = 送他走（裂隙要等火点着才开）\n" +
+                      "  每句话都会以**对话气泡**冒出来，**由那个时代的那个人物**说（用的就是模板 + 说话人那套）。\n" +
                       $"  画面上：每一格写着「链名 + 这一代叫什么 + 第几环」，**轮到点的那一格自己会亮白边框**。\n" +
                       $"  规则表在 {TablePath}：10 条规则管住 {CountStages() + 5} 个物体 —— 加一条链不用补规则。");
         }
@@ -1362,9 +1365,94 @@ namespace ZF.Puzzle.EditorTools
             PuzzleBootstrap bootstrap = root.AddComponent<PuzzleBootstrap>();
             root.AddComponent<PuzzlePointerController>();
 
+            // 反馈气泡：谜题发出的每一句话都用**对话系统的模板**冒出来（点一下退场）。
+            // 模板就用工程里现成的那份「旁白气泡」—— 位置 / 纸色 / 字号 / 打字机 / 动画全在 Prefab 里，
+            // 想改外观去改 Prefab，代码一行都不用动。
+            PuzzleFeedbackBubble bubble = root.AddComponent<PuzzleFeedbackBubble>();
+
             SerializedObject so = new SerializedObject(bootstrap);
             SetRef(so, "table", table);
             so.ApplyModifiedPropertiesWithoutUndo();
+
+            SerializedObject bubbleSo = new SerializedObject(bubble);
+            SetRef(bubbleSo, "template", LoadTipTemplate());
+            WriteSpeakerBindings(bubbleSo, EnsureSpeakers());
+            bubbleSo.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>默认的反馈气泡模板（对话系统那套模板 Prefab 里挑出来的「旁白」那份）。</summary>
+        private const string TipTemplatePath = "Assets/Prefab/Templates/Template_Tip.prefab";
+
+        /// <summary>人物「对话说话人」资产的存放处（没有就自动生成，不用你手建）。</summary>
+        private const string SpeakesFolder = GeneratedFolder + "/Speakers";
+
+        private static DialogueLayoutRefs LoadTipTemplate()
+        {
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(TipTemplatePath);
+            DialogueLayoutRefs layout = prefab != null ? prefab.GetComponent<DialogueLayoutRefs>() : null;
+
+            if (layout == null)
+            {
+                Debug.LogWarning($"[谜题] 找不到反馈气泡模板「{TipTemplatePath}」（或者它根上没挂 DialogueLayoutRefs）。\n" +
+                                 "  反馈会退回只打 Console；想修就把任意一份对话模板 Prefab 拖到 PuzzleRoot 上" +
+                                 "那个 PuzzleFeedbackBubble 的「对话模板 Prefab」字段。");
+            }
+
+            return layout;
+        }
+
+        /// <summary>
+        /// 给每个人物准备一份对话系统的「说话人」资产（名字 = 人物显示名）。
+        /// 存在就复用，不存在就生成到 Generated/Speakers 下 —— 所以"提示由对应时代的那个人说"
+        /// 这件事不需要你手动配任何东西。
+        /// </summary>
+        private static List<DialogueSpeaker> EnsureSpeakers()
+        {
+            EraWindowSceneBuilder.EnsureFolder(GeneratedFolder);
+            EraWindowSceneBuilder.EnsureFolder(SpeakesFolder);
+
+            List<DialogueSpeaker> result = new List<DialogueSpeaker>();
+
+            for (int i = 0; i < CharacterIds.Length; i++)
+            {
+                string path = $"{SpeakesFolder}/Speaker_{CharacterIds[i]}.asset";
+                DialogueSpeaker speaker = AssetDatabase.LoadAssetAtPath<DialogueSpeaker>(path);
+
+                if (speaker == null)
+                {
+                    speaker = ScriptableObject.CreateInstance<DialogueSpeaker>();
+                    AssetDatabase.CreateAsset(speaker, path);
+                }
+
+                speaker.name = CharacterNames[i];
+                speaker.id = i;
+                EditorUtility.SetDirty(speaker);
+
+                result.Add(speaker);
+            }
+
+            AssetDatabase.SaveAssets();
+            return result;
+        }
+
+        /// <summary>把「人物 id → 说话人」写进反馈气泡桥的列表里（私有 [SerializeField] 只能这样写）。</summary>
+        private static void WriteSpeakerBindings(SerializedObject bubbleSo, List<DialogueSpeaker> speakers)
+        {
+            SerializedProperty list = bubbleSo.FindProperty("speakers");
+            if (list == null)
+            {
+                Debug.LogError("[谜题] PuzzleFeedbackBubble 上没有 speakers 字段 —— 字段名改了？");
+                return;
+            }
+
+            list.arraySize = CharacterIds.Length;
+
+            for (int i = 0; i < CharacterIds.Length; i++)
+            {
+                SerializedProperty element = list.GetArrayElementAtIndex(i);
+                element.FindPropertyRelative("characterId").stringValue = CharacterIds[i];
+                element.FindPropertyRelative("speaker").objectReferenceValue = speakers[i];
+            }
         }
 
         private static void ClearDemoObjects()

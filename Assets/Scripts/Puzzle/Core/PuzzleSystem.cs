@@ -22,7 +22,10 @@ namespace ZF.Puzzle
         /// <summary>这组条件现在全部满足吗。物体的 visualRules 也靠它判。</summary>
         bool EvaluateAll(IReadOnlyList<PuzzleCondition> conditions, string targetId = "");
 
-        /// <summary>玩家点了某个物体。手里有道具就先试「用道具」，没有匹配的规则再退回空手点。</summary>
+        /// <summary>
+        /// 玩家点了某个物体。手里有道具就先试「用道具」；手里没有、但背包里有正好合用的那个，
+        /// 也直接用它（不用先按 Tab 换到手里）；都不成立才退回空手点。
+        /// </summary>
         void Interact(string targetId);
 
         void Interact(string targetId, Verb verb, string itemId);
@@ -102,11 +105,50 @@ namespace ZF.Puzzle
                     return;
                 }
 
+                // ★ 手里没拿，但背包里有"正好能用在它上面"的那个道具 → 直接用它。
+                //   "先把道具换到手里"这一下在背包 UI 做出来之前纯粹是按键负担：
+                //   玩家已经**有**燧石了，点钻木取火的意思就是拿它打火，没有第二种解释。
+                //   （规则表里写「用 X 点它」的那条规则说了算 —— 这里只是替玩家省掉按 Tab 那一下。）
+                string auto = FindUsableItem(targetId, model);
+                if (!string.IsNullOrEmpty(auto))
+                {
+                    model.SetSelectedItem(auto);
+                    RunRules(targetId, Verb.UseItem, auto);
+                    return;
+                }
+
                 RunRules(targetId, Verb.Interact, "");
                 return;
             }
 
             RunRules(targetId, verb, itemId);
+        }
+
+        /// <summary>
+        /// 背包里有没有"正好能用在被点的这个东西上"的道具：规则表里写了「用某个道具点它」、而那个道具在背包里。
+        /// 有就返回它（背包顺序 = 先拿到先用）。**不看条件** —— 条件不满足是那条规则自己的事，
+        /// 该由它给出 elseFeedback，这里只管"该不该拿这个道具去点"。
+        /// </summary>
+        private string FindUsableItem(string targetId, IPuzzleModel model)
+        {
+            if (m_Table == null || model == null || model.Items.Count == 0)
+            {
+                return "";
+            }
+
+            string category = model.GetTargetCategory(targetId);
+
+            for (int i = 0; i < model.Items.Count; i++)
+            {
+                string item = model.Items[i];
+                if (!string.IsNullOrEmpty(item) &&
+                    PuzzleRuleMatcher.HasMatch(m_Table.interactionRules, targetId, category, Verb.UseItem, item))
+                {
+                    return item;
+                }
+            }
+
+            return "";
         }
 
         private bool RunRules(string targetId, Verb verb, string itemId)
