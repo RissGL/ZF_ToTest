@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e21ba352f736407f9a3f0543014f6999, type: 3}
+  m_Name: Chapter_01
+  m_EditorClassIdentifier: 
+  chapterId: 0
+  startGroupId: Group_2
+  groups:
+  - groupId: Group_2
+    templateId: 0
+    transitionId: 
+    transitionDirection: 100
+    transitionColor: {r: 0, g: 0, b: 0, a: 0}
+    transitionDuration: 0
+    enterAudio: {fileID: 0}
+    bubbleStyle: {fileID: 0}
+    cast: []
+    groupTexts:
+    - speaker: {fileID: 11400000, guid: 0600a37b821c08440bd832dc73a5d42c, type: 2}
+      text: 121212
+      expression: 0
+      audioEff: {fileID: 11400000, guid: cd70671baf1fe86469b322a6fa5530ba, type: 2}
+      bubbleStyle: {fileID: 11400000, guid: d50ac9d4815c3a64f87caf2df4f875c4, type: 2}
+      slotId: 
+    - speaker: {fileID: 11400000, guid: 0600a37b821c08440bd832dc73a5d42c, type: 2}
+      text: 343434
+      expression: 0
+      audioEff: {fileID: 11400000, guid: cd70671baf1fe86469b322a6fa5530ba, type: 2}
+      bubbleStyle: {fileID: 11400000, guid: d50ac9d4815c3a64f87caf2df4f875c4, type: 2}
+      slotId: 
+    choices: []
+    nextGroupId: 
